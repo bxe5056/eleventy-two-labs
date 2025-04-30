@@ -56,4 +56,77 @@ To learn more about Next.js, take a look at the following resources:
 - [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
 - [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
+# SpanishVoice - Voice-First Spanish Learning App
 
+SpanishVoice is a voice-centric educational application designed to help users learn Spanish through natural conversation, leveraging the power of ElevenLabs Conversational AI.
+
+## Features
+
+- **Voice-First Learning:** Practice Spanish pronunciation and conversation skills through a natural voice interface
+- **Structured Lessons:** Progress through organized content from beginner to advanced levels
+- **Instant Feedback:** Get real-time pronunciation guidance and corrections
+- **Adaptive Learning:** Content that adjusts to your skill level as you improve
+- **Visual Reinforcement:** Minimal visual aids that complement the voice experience without distracting from it
+
+## Technical Implementation
+
+- Next.js 15 with React 19
+- Tailwind CSS for styling
+- Integration with ElevenLabs Conversational AI API
+- Web Speech API for voice recognition
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ installed
+- An ElevenLabs API key
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Create a `.env.local` file in the root directory with your ElevenLabs API key:
+   ```
+   ELEVENLABS_API_KEY=your_api_key_here
+   ```
+
+### Development
+
+Run the development server:
+
+```
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the application.
+
+## Usage
+
+1. Start on the home page and click the microphone button to begin speaking
+2. Browse available lessons by clicking "Browse All Lessons"
+3. Select a lesson to view vocabulary, phrases, and start practicing
+4. Use the voice interface to engage in conversation practice
+
+## About This Demo
+
+This application was created as a demonstration for ElevenLabs Conversational AI capabilities in an educational context. It showcases how voice AI can create an immersive, voice-first learning experience without traditional interfaces.
+
+The current implementation includes:
+
+- Mock demonstrations of voice interaction (in a production app, this would use the actual ElevenLabs Conversational API)
+- Sample lesson content for Spanish learning
+- A responsive UI that emphasizes voice interaction while providing necessary visual context
+
+## Next Steps
+
+With additional development time, the application could be enhanced with:
+
+- Full integration with ElevenLabs Conversational API
+- Progress tracking and personalized learning paths
+- More extensive lesson content and difficulty levels
+- Gamification elements to increase engagement
+- Offline capabilities for learning on-the-go
