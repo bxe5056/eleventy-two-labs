@@ -72,15 +72,16 @@ SpanishVoice is a voice-centric educational application designed to help users l
 
 - Next.js 15 with React 19
 - Tailwind CSS for styling
-- Integration with ElevenLabs Conversational AI API
-- Web Speech API for voice recognition
+- Integration with ElevenLabs Conversational AI API via the official @11labs/react package
+- Web Speech API for backup voice recognition
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+ installed
-- An ElevenLabs API key
+- An ElevenLabs API key (obtain from [ElevenLabs](https://elevenlabs.io/))
+- An ElevenLabs Agent ID (create an agent through the ElevenLabs dashboard)
 
 ### Installation
 
@@ -91,7 +92,7 @@ SpanishVoice is a voice-centric educational application designed to help users l
    ```
 3. Create a `.env.local` file in the root directory with your ElevenLabs API key:
    ```
-   ELEVENLABS_API_KEY=your_api_key_here
+   NEXT_PUBLIC_AGENT_ID=your_public_agent_id_here
    ```
 
 ### Development
@@ -104,29 +105,75 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) to view the application.
 
+## Setting Up ElevenLabs Conversational AI
+
+### Creating an Agent
+
+1. Create an account at [ElevenLabs](https://elevenlabs.io/)
+2. Navigate to the "Conversational AI" section in your dashboard
+3. Create a new agent:
+   - Give it a name (e.g., "Spanish Tutor")
+   - Select a voice (ideally with Spanish capabilities)
+   - Configure the agent's personality and domain knowledge
+   - Set the language to Spanish or Spanish/English bilingual
+
+### Agent Configuration
+
+1. Configure your agent's knowledge:
+
+   - Add key phrases and vocabulary for Spanish learning
+   - Set up example conversations to establish teaching patterns
+   - Add pronunciation guides and language learning resources
+
+2. Add a system prompt that defines your agent's behavior, for example:
+   ```
+   You are a Spanish language tutor. Your goal is to help the user learn Spanish through natural conversation.
+   Speak primarily in Spanish but add English translations in parentheses when introducing new words or phrases.
+   Correct the user's pronunciation or grammar mistakes gently, and encourage them to speak as much as possible.
+   ```
+
+### Integration
+
+The app uses the official `@11labs/react` package for integration with ElevenLabs' Conversational AI:
+
+1. You can enter your API key and Agent ID directly in the application
+2. The application handles the WebSocket connection to the ElevenLabs API
+3. Real-time transcription and speech synthesis are managed through the ElevenLabs services
+
 ## Usage
 
 1. Start on the home page and click the microphone button to begin speaking
-2. Browse available lessons by clicking "Browse All Lessons"
-3. Select a lesson to view vocabulary, phrases, and start practicing
-4. Use the voice interface to engage in conversation practice
+2. If no API key is configured, you'll be prompted to enter it along with your Agent ID
+3. Speak in Spanish or English to interact with the AI tutor
+4. The app will process your speech and respond with Spanish voice output through the ElevenLabs agent
+5. Browse available lessons by clicking "Browse All Lessons"
+6. Select a lesson to view vocabulary, phrases, and start practicing
 
 ## About This Demo
 
 This application was created as a demonstration for ElevenLabs Conversational AI capabilities in an educational context. It showcases how voice AI can create an immersive, voice-first learning experience without traditional interfaces.
 
-The current implementation includes:
-
-- Mock demonstrations of voice interaction (in a production app, this would use the actual ElevenLabs Conversational API)
-- Sample lesson content for Spanish learning
-- A responsive UI that emphasizes voice interaction while providing necessary visual context
-
 ## Next Steps
 
 With additional development time, the application could be enhanced with:
 
-- Full integration with ElevenLabs Conversational API
+- More sophisticated language processing capabilities
 - Progress tracking and personalized learning paths
 - More extensive lesson content and difficulty levels
 - Gamification elements to increase engagement
 - Offline capabilities for learning on-the-go
+
+## Environment Setup
+
+This application uses ElevenLabs Conversational AI API. To set up your environment:
+
+1. Create a `.env.local` file in the root directory with the following content:
+
+```
+# ElevenLabs API Key/Agent ID
+NEXT_PUBLIC_AGENT_ID=your_elevenlabs_agent_id_here
+```
+
+2. Replace `your_elevenlabs_agent_id_here` with your actual ElevenLabs agent ID.
+
+3. If you don't have an agent ID in the environment variables, the application will prompt you to enter your API key manually.

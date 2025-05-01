@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { use } from "react";
 import Link from "next/link";
 import LessonContent from "../../components/LessonContent";
 import ConversationInterface from "../../components/ConversationInterface";
@@ -20,7 +20,9 @@ interface Lesson {
 }
 
 export default function LessonPage({ params }: LessonPageProps) {
-  const { id } = params;
+  // Use React.use() to unwrap the params promise
+  const resolvedParams = use(params);
+  const { id } = resolvedParams;
 
   // Mock database lookup
   const getLessonById = (id: string): Lesson | undefined => {

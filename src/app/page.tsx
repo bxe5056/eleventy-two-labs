@@ -1,13 +1,28 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import VoiceInteraction from "./components/VoiceInteraction";
+import ConversationalAgent from "./components/ConversationalAgent";
+import { getApiKey } from "./utils/elevenlabs";
 
 export default function Home() {
+  const [agentId, setAgentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Get agent ID when component mounts
+    setAgentId(getApiKey());
+  }, []);
+
   return (
     <div className="bg-gradient-to-b from-white to-amber-50 dark:from-slate-900 dark:to-slate-800">
+      {/* Agent ID Indicator */}
+      {agentId && (
+        <div className="fixed top-2 right-2 z-50 bg-slate-800 text-white text-xs px-3 py-1 rounded-full shadow-md">
+          Agent ID: {agentId.slice(0, 8)}...
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="pt-20 pb-32 px-4 md:px-8">
         <div className="max-w-6xl mx-auto text-center">
@@ -20,7 +35,7 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col items-center mb-16">
-            <VoiceInteraction />
+            <ConversationalAgent />
             <p className="mt-6 text-slate-600 dark:text-slate-400">
               Click the button and speak to begin your Spanish journey
             </p>
