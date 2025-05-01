@@ -19,24 +19,24 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className={`${inter.className} antialiased`}>
         <div className="min-h-screen flex flex-col">
-          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md shadow-sm border-b border-slate-200 py-4">
+          <header className="sticky top-0 z-10 bg-slate-800/90 backdrop-blur-md shadow-sm border-b border-slate-700 py-4">
             <div className="container mx-auto px-4 flex justify-between items-center">
               <Link
                 href="/"
-                className="font-bold text-2xl bg-gradient-to-r from-amber-500 to-red-600 bg-clip-text text-transparent"
+                className="font-bold text-2xl bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent"
               >
                 SpanishVoice
               </Link>
               <nav className="hidden md:flex items-center space-x-8">
                 <Link
                   href="/"
-                  className="text-slate-700 hover:text-amber-600 transition-colors"
+                  className="text-slate-200 hover:text-indigo-400 transition-colors"
                 >
                   Home
                 </Link>
                 <Link
                   href="/#lessons-section"
-                  className="text-slate-700 hover:text-amber-600 transition-colors cursor-pointer"
+                  className="text-slate-200 hover:text-indigo-400 transition-colors cursor-pointer"
                 >
                   Lessons
                 </Link>
@@ -44,7 +44,7 @@ export default function RootLayout({
                   Start Speaking
                 </Link>
               </nav>
-              <button className="md:hidden text-slate-700 hover:bg-slate-100 p-2 rounded-lg transition-colors">
+              <button className="md:hidden text-slate-200 hover:bg-slate-700/50 p-2 rounded-lg transition-colors">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
