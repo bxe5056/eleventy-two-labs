@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+"use client";
+
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
@@ -8,12 +9,6 @@ const inter = Inter({
   variable: "--font-inter",
   display: "swap",
 });
-
-export const metadata: Metadata = {
-  title: "SpanishVoice - Learn Spanish Through Conversation",
-  description:
-    "A voice-first Spanish learning application using ElevenLabs Conversational AI",
-};
 
 export default function RootLayout({
   children,
@@ -40,14 +35,14 @@ export default function RootLayout({
                   Home
                 </Link>
                 <Link
-                  href="/lessons"
-                  className="text-slate-700 hover:text-amber-600 transition-colors"
+                  href="/#lessons-section"
+                  className="text-slate-700 hover:text-amber-600 transition-colors cursor-pointer"
                 >
                   Lessons
                 </Link>
-                <button className="btn btn-primary rounded-full">
+                <Link href="/#top" className="btn btn-primary rounded-full">
                   Start Speaking
-                </button>
+                </Link>
               </nav>
               <button className="md:hidden text-slate-700 hover:bg-slate-100 p-2 rounded-lg transition-colors">
                 <svg
@@ -98,8 +93,8 @@ export default function RootLayout({
                     </li>
                     <li>
                       <Link
-                        href="/lessons"
-                        className="text-slate-600 hover:text-amber-600 transition-colors"
+                        href="/#lessons-section"
+                        className="text-slate-600 hover:text-amber-600 transition-colors cursor-pointer"
                       >
                         Lessons
                       </Link>
@@ -112,17 +107,23 @@ export default function RootLayout({
                     For inquiries or support, please contact us at:
                   </p>
                   <a
-                    href="mailto:support@spanishvoice.com"
+                    href="mailto:spanishvoice@bentheitguy.me"
                     className="text-amber-600 hover:text-amber-700 transition-colors"
                   >
-                    support@spanishvoice.com
+                    spanishvoice@bentheitguy.me
                   </a>
                 </div>
               </div>
               <div className="border-t border-slate-200 mt-8 pt-8 text-center">
                 <p className="text-slate-500 text-sm">
-                  © {new Date().getFullYear()} SpanishVoice. All rights
-                  reserved.
+                  © {new Date().getFullYear()}{" "}
+                  <a
+                    href="https://bentheitguy.me"
+                    className="text-amber-600 hover:text-amber-700 transition-colors"
+                  >
+                    BenTheITGuy
+                  </a>
+                  . All rights reserved.
                 </p>
               </div>
             </div>

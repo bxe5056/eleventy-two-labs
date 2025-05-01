@@ -20,6 +20,83 @@ interface MessageEntry {
   isUser: boolean;
   translation?: string;
   isSystemMessage?: boolean;
+  language?: "english" | "spanish" | "mixed";
+  showTranslation?: boolean;
+  translationCountdown?: number;
+  translationInProgress?: boolean;
+  messageComplete?: boolean;
+}
+
+// Translation countdown component for better rendering performance
+function TranslationCountdown({
+  initialSeconds,
+  onComplete,
+  getText,
+}: {
+  initialSeconds: number;
+  onComplete: () => void;
+  getText: (seconds: number) => string;
+}) {
+  const [seconds, setSeconds] = useState(initialSeconds);
+  const progressPercent = ((initialSeconds - seconds) / initialSeconds) * 100;
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setTimeout(onComplete, 100); // Give it a slight delay before completion
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    console.log(
+      "Translation countdown started, will complete in",
+      initialSeconds,
+      "seconds"
+    );
+
+    return () => {
+      console.log("Countdown component unmounted, clearing timer");
+      clearInterval(timer);
+    };
+  }, [onComplete, initialSeconds]);
+
+  return (
+    <div className="translation-countdown mt-2 border-t border-white/20 pt-2">
+      <div className="flex items-center text-xs text-white/70">
+        <svg
+          className="animate-spin -ml-1 mr-2 h-3 w-3 text-white/60"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+        <span>{getText(seconds)}</span>
+        <div className="ml-2 flex-1 bg-white/20 rounded-full h-1.5 overflow-hidden">
+          <div
+            className="bg-white h-full transition-all duration-1000"
+            style={{ width: `${progressPercent}%` }}
+          ></div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ConversationalAgent({
@@ -68,6 +145,9 @@ export default function ConversationalAgent({
 
         console.log(`${isUser ? "User" : "AI"} message:`, messageText);
 
+        // Detect language
+        const language = detectLanguage(messageText);
+
         if (isUser) {
           setTranscript(messageText);
         } else {
@@ -85,7 +165,18 @@ export default function ConversationalAgent({
           ) {
             return prev; // Skip duplicate messages
           }
-          return [...prev, { text: messageText, isUser }];
+
+          // Create new message object with language detection
+          const newMessage: MessageEntry = {
+            text: messageText,
+            isUser,
+            language,
+            showTranslation: false,
+            translationInProgress: false,
+            messageComplete: isUser, // User messages are complete immediately
+          };
+
+          return [...prev, newMessage];
         });
 
         if (onConversationUpdate) {
@@ -114,63 +205,75 @@ export default function ConversationalAgent({
     }
   }, []);
 
-  // Add a useEffect to handle translation timer
-  useEffect(() => {
-    let translationTimer: NodeJS.Timeout;
-
-    if (transcript) {
-      // Reset translation state when new transcript comes in
-      setShowTranslation(false);
-      setTranslation("");
-
-      // Simple mock translation - in a real app, call a translation API
-      const mockTranslate = (text: string) => {
-        // Very basic Spanish to English translations for demo purposes
-        const translations: Record<string, string> = {
-          hola: "hello",
-          "buenos días": "good morning",
-          "buenas tardes": "good afternoon",
-          "buenas noches": "good night",
-          "cómo estás": "how are you",
-          "me llamo": "my name is",
-          gracias: "thank you",
-          "por favor": "please",
-          adiós: "goodbye",
-          "hasta luego": "see you later",
-        };
-
-        // Simple word replacement - just for demonstration
-        let translated = text.toLowerCase();
-        Object.entries(translations).forEach(([spanish, english]) => {
-          translated = translated.replace(new RegExp(spanish, "gi"), english);
-        });
-
-        return translated.charAt(0).toUpperCase() + translated.slice(1);
-      };
-
-      // Set timer to show translation after 20 seconds
-      translationTimer = setTimeout(() => {
-        const translatedText = mockTranslate(transcript);
-        setTranslation(translatedText);
-        setShowTranslation(true);
-
-        // Update the last user message with translation
-        setMessageHistory((prev) => {
-          const updated = [...prev];
-          for (let i = updated.length - 1; i >= 0; i--) {
-            if (updated[i].isUser) {
-              updated[i] = { ...updated[i], translation: translatedText };
-              break;
-            }
-          }
-          return updated;
-        });
-      }, 20000);
-    }
-
-    return () => {
-      if (translationTimer) clearTimeout(translationTimer);
+  // Simple mock translation functions
+  const mockTranslate = (text: string): string => {
+    // Very basic Spanish to English translations for demo purposes
+    const translations: Record<string, string> = {
+      hola: "hello",
+      "buenos días": "good morning",
+      "buenas tardes": "good afternoon",
+      "buenas noches": "good night",
+      "cómo estás": "how are you",
+      "me llamo": "my name is",
+      gracias: "thank you",
+      "por favor": "please",
+      adiós: "goodbye",
+      "hasta luego": "see you later",
+      sí: "yes",
+      no: "no",
+      "¿qué?": "what?",
+      "¿cómo?": "how?",
+      "¿dónde?": "where?",
+      "¿cuándo?": "when?",
+      "¿por qué?": "why?",
+      // Add more common phrases as needed
     };
+
+    // Simple word replacement - just for demonstration
+    let translated = text.toLowerCase();
+    Object.entries(translations).forEach(([spanish, english]) => {
+      translated = translated.replace(new RegExp(spanish, "gi"), english);
+    });
+
+    return translated.charAt(0).toUpperCase() + translated.slice(1);
+  };
+
+  // Simple mock translation from English to Spanish
+  const mockTranslateToEnglish = (text: string): string => {
+    // Basic Spanish to English translations for AI responses
+    const translations: Record<string, string> = {
+      "¡hola!": "Hello!",
+      "buenos días": "Good morning",
+      "buenas tardes": "Good afternoon",
+      "buenas noches": "Good night",
+      "¿cómo estás?": "How are you?",
+      "me llamo": "My name is",
+      gracias: "Thank you",
+      "por favor": "Please",
+      adiós: "Goodbye",
+      "hasta luego": "See you later",
+      "¿qué quieres aprender hoy?": "What do you want to learn today?",
+      "¿cómo te puedo ayudar?": "How can I help you?",
+      "¿entiendes?": "Do you understand?",
+      "repite después de mí": "Repeat after me",
+      "muy bien": "Very good",
+      excelente: "Excellent",
+      // Add more common phrases as needed
+    };
+
+    // Simple word replacement
+    let translated = text;
+    Object.entries(translations).forEach(([spanish, english]) => {
+      translated = translated.replace(new RegExp(spanish, "gi"), english);
+    });
+
+    return translated;
+  };
+
+  // Add a useEffect to handle translation timer for user messages
+  useEffect(() => {
+    // Nothing to do here - we now handle user message translations
+    // in the same way as AI messages via the countdown system
   }, [transcript]);
 
   // Get a signed URL for private agents
@@ -289,8 +392,196 @@ export default function ConversationalAgent({
     hasTranscript ? "flex-col md:flex-row items-start" : "flex-col items-center"
   } gap-8 w-full max-w-6xl mx-auto`;
 
+  // Simple language detection helper
+  const detectLanguage = (text: string): "english" | "spanish" | "mixed" => {
+    if (!text) return "english";
+    console.log("Detecting language for:", text);
+
+    // Spanish specific characters and common words
+    const spanishPatterns = [
+      /[áéíóúüñ¿¡]/i,
+      /\b(el|la|los|las|un|una|unos|unas|y|en|de|con|por|para|es|son|está|están|hola|gracias|buenos|buenas|días|tardes|noches|cómo|qué|quién|dónde|cuándo|por qué)\b/i,
+    ];
+
+    // English specific common words
+    const englishPatterns = [
+      /\b(the|a|an|and|in|of|to|for|is|are|am|be|been|being|was|were|hello|thank|good|morning|afternoon|evening|night|how|what|who|where|when|why)\b/i,
+    ];
+
+    let spanishMatches = 0;
+    let englishMatches = 0;
+
+    // Check for Spanish patterns
+    spanishPatterns.forEach((pattern) => {
+      if (pattern.test(text)) {
+        spanishMatches++;
+        console.log("Spanish match found:", pattern);
+      }
+    });
+
+    // Check for English patterns
+    englishPatterns.forEach((pattern) => {
+      if (pattern.test(text)) {
+        englishMatches++;
+        console.log("English match found:", pattern);
+      }
+    });
+
+    console.log(
+      `Language detection: Spanish matches: ${spanishMatches}, English matches: ${englishMatches}`
+    );
+
+    // If text has Spanish accents or significantly more Spanish words, call it Spanish
+    if (spanishMatches > 0 && spanishMatches > englishMatches) {
+      console.log("Detected as: spanish");
+      return "spanish";
+    }
+
+    // If text has more English words than Spanish, call it English
+    if (englishMatches > 0 && englishMatches >= spanishMatches) {
+      console.log("Detected as: english");
+      return "english";
+    }
+
+    // If it has both languages more or less equally, call it mixed
+    if (spanishMatches > 0 && englishMatches > 0) {
+      console.log("Detected as: mixed");
+      return "mixed";
+    }
+
+    // Default fallback - check for Spanish accents as a last resort
+    const isSpanish = /[áéíóúüñ]/.test(text);
+    console.log(
+      "Detected as:",
+      isSpanish ? "spanish" : "english",
+      "(fallback)"
+    );
+    return isSpanish ? "spanish" : "english";
+  };
+
+  // Styles for message bubbles
+  const messageStyles = `
+    .message-bubble {
+      padding: 0.75rem 1rem;
+      border-radius: 1rem;
+      max-width: 85%;
+      position: relative;
+      word-break: break-word;
+    }
+    
+    .user-message {
+      border-bottom-right-radius: 0.25rem;
+    }
+    
+    .agent-message {
+      border-bottom-left-radius: 0.25rem;
+    }
+    
+    .spanish-text {
+      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+    }
+    
+    .english-text {
+      box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+    }
+    
+    .mixed-text {
+      box-shadow: 0 2px 4px rgba(168, 85, 247, 0.2);
+    }
+  `;
+
+  // Real translation function using Amazon Translate API
+  const translateText = async (
+    text: string,
+    sourceLang: string,
+    targetLang: string
+  ): Promise<string> => {
+    try {
+      console.log(
+        `Translation request: "${text}" from ${sourceLang} to ${targetLang}`
+      );
+
+      // Call our API endpoint that uses Amazon Translate
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, sourceLang, targetLang }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error(`Translation API error (${response.status}):`, errorData);
+        throw new Error(`Translation API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log("Translation API response:", data);
+
+      // If we got a real translation from Amazon
+      if (data.translatedText) {
+        console.log(
+          `Translation success (${data.source}):`,
+          data.translatedText
+        );
+        return data.translatedText;
+      }
+
+      // Fallback to our mock functions if the API call failed
+      console.warn(
+        "Translation API returned no result, using mock translation"
+      );
+      let fallbackTranslation = text;
+
+      if (sourceLang === "es" && targetLang === "en") {
+        fallbackTranslation = mockTranslate(text);
+      } else if (sourceLang === "auto" && targetLang === "en") {
+        fallbackTranslation = mockTranslateToEnglish(text);
+      }
+
+      console.log("Fallback translation:", fallbackTranslation);
+      return fallbackTranslation;
+    } catch (error) {
+      console.error("Translation error:", error);
+
+      // Fallback to mock translations on error
+      let fallbackTranslation = text;
+
+      if (sourceLang === "es" && targetLang === "en") {
+        fallbackTranslation = mockTranslate(text);
+      } else if (sourceLang === "auto" && targetLang === "en") {
+        fallbackTranslation = mockTranslateToEnglish(text);
+      }
+
+      console.log("Error fallback translation:", fallbackTranslation);
+      return fallbackTranslation || text;
+    }
+  };
+
+  // Handle isSpeaking changes to detect when messages are complete
+  useEffect(() => {
+    if (!conversation.isSpeaking) {
+      // When AI stops speaking, mark the last AI message as complete
+      setMessageHistory((prev) => {
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (!prev[i].isUser && !prev[i].messageComplete) {
+            const updated = [...prev];
+            updated[i] = { ...updated[i], messageComplete: true };
+            return updated;
+          }
+        }
+        return prev;
+      });
+    }
+  }, [conversation.isSpeaking]);
+
+  // Handle translation for completed messages
+  useEffect(() => {
+    // Nothing to do here - translation countdown is now handled by the TranslationCountdown component
+  }, [messageHistory]);
+
   return (
     <div className={containerClasses}>
+      <style jsx>{messageStyles}</style>
       <div
         className={`flex flex-col items-center ${
           hasTranscript ? "" : "mx-auto"
@@ -387,7 +678,7 @@ export default function ConversationalAgent({
 
       {/* Transcript Panel - Now displayed side by side with the button on larger screens */}
       {hasTranscript && (
-        <div className="transcript-panel flex-1 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-md text-left max-w-md w-full min-h-[250px] flex flex-col">
+        <div className="transcript-panel flex-1 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-md text-left w-full min-h-[250px] flex flex-col">
           <h3 className="text-lg font-medium mb-3 text-slate-900 dark:text-white">
             Conversation
           </h3>
@@ -433,18 +724,109 @@ export default function ConversationalAgent({
                   <div
                     className={`message-bubble ${
                       message.isUser ? "user-message" : "agent-message"
+                    } ${
+                      message.language === "spanish"
+                        ? "spanish-text bg-blue-500 dark:bg-blue-600"
+                        : message.language === "english"
+                        ? "english-text bg-green-500 dark:bg-green-600"
+                        : "mixed-text bg-purple-500 dark:bg-purple-600"
                     }`}
                   >
                     <p
                       className={
                         message.isUser
                           ? "text-white"
-                          : "text-slate-800 dark:text-slate-200"
+                          : "text-white dark:text-white"
                       }
                     >
                       {message.text}
                     </p>
-                    {message.isUser && message.translation && (
+
+                    {/* Show countdown timer for translation */}
+                    {message.messageComplete &&
+                      message.language !== "english" &&
+                      !message.showTranslation &&
+                      !message.translationInProgress && (
+                        <TranslationCountdown
+                          initialSeconds={15}
+                          onComplete={() => {
+                            console.log(
+                              "Translation countdown complete for message:",
+                              message.text
+                            );
+
+                            // Start the translation process
+                            const sourceLang =
+                              message.language === "spanish" ? "es" : "auto";
+                            console.log(
+                              "Starting translation with source language:",
+                              sourceLang
+                            );
+
+                            // Mark as in progress to prevent duplicate countdowns
+                            setMessageHistory((current) => {
+                              console.log(
+                                "Marking message as translation in progress"
+                              );
+                              return current.map((msg) =>
+                                msg === message
+                                  ? { ...msg, translationInProgress: true }
+                                  : msg
+                              );
+                            });
+
+                            // Get the translation
+                            translateText(message.text, sourceLang, "en")
+                              .then((translatedText) => {
+                                console.log(
+                                  "Translation received:",
+                                  translatedText
+                                );
+                                setMessageHistory((current) => {
+                                  console.log(
+                                    "Updating message with translation"
+                                  );
+                                  return current.map((currentMsg) => {
+                                    if (
+                                      currentMsg.text === message.text &&
+                                      currentMsg.isUser === message.isUser
+                                    ) {
+                                      return {
+                                        ...currentMsg,
+                                        translation: translatedText,
+                                        showTranslation: true,
+                                      };
+                                    }
+                                    return currentMsg;
+                                  });
+                                });
+                              })
+                              .catch((err) => {
+                                console.error("Translation error:", err);
+                                // Still mark as translated with an error message
+                                setMessageHistory((current) =>
+                                  current.map((currentMsg) => {
+                                    if (
+                                      currentMsg.text === message.text &&
+                                      currentMsg.isUser === message.isUser
+                                    ) {
+                                      return {
+                                        ...currentMsg,
+                                        translation: "Translation failed",
+                                        showTranslation: true,
+                                      };
+                                    }
+                                    return currentMsg;
+                                  })
+                                );
+                              });
+                          }}
+                          getText={(seconds) => `Translation in ${seconds}s`}
+                        />
+                      )}
+
+                    {/* Show translation after countdown completes */}
+                    {message.translation && message.showTranslation && (
                       <p className="text-white/80 text-sm pt-1 border-t border-white/20 mt-1 italic">
                         {message.translation}
                       </p>
@@ -498,35 +880,6 @@ export default function ConversationalAgent({
                 </div>
               </div>
             )}
-
-            {/* Translation indicator */}
-            {transcript &&
-              !showTranslation &&
-              messageHistory.some((m) => m.isUser) && (
-                <div className="text-xs text-slate-500 mt-2 flex items-center justify-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-2 h-3 w-3 text-amber-500"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Translation will appear shortly...
-                </div>
-              )}
           </div>
         </div>
       )}

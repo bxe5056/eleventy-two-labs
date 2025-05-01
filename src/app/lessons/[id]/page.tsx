@@ -2,13 +2,13 @@
 
 import React, { use } from "react";
 import Link from "next/link";
-import LessonContent from "../../components/LessonContent";
-import ConversationInterface from "../../components/ConversationInterface";
+import ConversationalAgent from "@/app/components/ConversationalAgent";
+import LessonContent from "@/app/components/LessonContent";
 
 interface LessonPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 interface Lesson {
@@ -19,66 +19,58 @@ interface Lesson {
   description: string;
 }
 
+// Mock lessons data - same as the home page
+const lessons: Lesson[] = [
+  {
+    id: "basic-greetings",
+    title: "Basic Greetings",
+    category: "Conversation",
+    level: "beginner",
+    description: "Learn essential Spanish greetings for everyday situations.",
+  },
+  {
+    id: "ordering-food",
+    title: "Ordering Food",
+    category: "Practical",
+    level: "beginner",
+    description:
+      "Master the vocabulary and phrases needed to order food in Spanish.",
+  },
+  {
+    id: "asking-directions",
+    title: "Asking for Directions",
+    category: "Travel",
+    level: "beginner",
+    description: "Learn how to ask for and understand directions in Spanish.",
+  },
+  {
+    id: "describing-people",
+    title: "Describing People",
+    category: "Vocabulary",
+    level: "intermediate",
+    description:
+      "Build vocabulary to describe people's appearance and personality.",
+  },
+  {
+    id: "past-tense",
+    title: "Past Tense Conversations",
+    category: "Grammar",
+    level: "intermediate",
+    description: "Practice using past tense in natural conversations.",
+  },
+  {
+    id: "subjunctive-mood",
+    title: "Subjunctive Mood",
+    category: "Grammar",
+    level: "advanced",
+    description: "Master the complex subjunctive mood in Spanish.",
+  },
+];
+
 export default function LessonPage({ params }: LessonPageProps) {
-  // Use React.use() to unwrap the params promise
+  // Unwrap the params Promise using React.use()
   const resolvedParams = use(params);
-  const { id } = resolvedParams;
-
-  // Mock database lookup
-  const getLessonById = (id: string): Lesson | undefined => {
-    const lessons: Lesson[] = [
-      {
-        id: "basic-greetings",
-        title: "Basic Greetings",
-        category: "Conversation",
-        level: "beginner",
-        description:
-          "Learn essential Spanish greetings for everyday situations.",
-      },
-      {
-        id: "ordering-food",
-        title: "Ordering Food",
-        category: "Practical",
-        level: "beginner",
-        description:
-          "Master the vocabulary and phrases needed to order food in Spanish.",
-      },
-      {
-        id: "asking-directions",
-        title: "Asking for Directions",
-        category: "Travel",
-        level: "beginner",
-        description:
-          "Learn how to ask for and understand directions in Spanish.",
-      },
-      {
-        id: "describing-people",
-        title: "Describing People",
-        category: "Vocabulary",
-        level: "intermediate",
-        description:
-          "Build vocabulary to describe people's appearance and personality.",
-      },
-      {
-        id: "past-tense",
-        title: "Past Tense Conversations",
-        category: "Grammar",
-        level: "intermediate",
-        description: "Practice using past tense in natural conversations.",
-      },
-      {
-        id: "subjunctive-mood",
-        title: "Subjunctive Mood",
-        category: "Grammar",
-        level: "advanced",
-        description: "Master the complex subjunctive mood in Spanish.",
-      },
-    ];
-
-    return lessons.find((lesson) => lesson.id === id);
-  };
-
-  const lesson = getLessonById(id);
+  const lesson = lessons.find((l) => l.id === resolvedParams.id);
 
   if (!lesson) {
     return (
@@ -105,8 +97,8 @@ export default function LessonPage({ params }: LessonPageProps) {
             We couldn't find the lesson you're looking for.
           </p>
           <Link
-            href="/lessons"
-            className="btn btn-primary rounded-full px-6 py-3 flex items-center gap-2 justify-center mx-auto w-full max-w-xs"
+            href="/#lessons-section"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-red-500 text-white rounded-full hover:shadow-lg transition-all duration-300"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -132,9 +124,9 @@ export default function LessonPage({ params }: LessonPageProps) {
   return (
     <div className="bg-slate-50 dark:bg-slate-900 min-h-screen pb-20">
       <div className="bg-gradient-to-r from-amber-500 to-red-500 py-16 px-4 md:px-8">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <Link
-            href="/lessons"
+            href="/#lessons-section"
             className="inline-flex items-center gap-2 text-white/90 hover:text-white mb-6 group"
           >
             <svg
@@ -163,7 +155,7 @@ export default function LessonPage({ params }: LessonPageProps) {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 md:px-8 -mt-8">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div>
             <LessonContent
@@ -194,7 +186,7 @@ export default function LessonPage({ params }: LessonPageProps) {
                   Practice Speaking
                 </h2>
               </div>
-              <ConversationInterface />
+              <ConversationalAgent />
             </div>
           </div>
         </div>

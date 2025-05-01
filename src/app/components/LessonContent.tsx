@@ -26,9 +26,9 @@ export default function LessonContent({
   category = "Conversation",
   level = "beginner",
 }: LessonContentProps) {
-  const [activeTab, setActiveTab] = useState<
-    "vocabulary" | "phrases" | "practice"
-  >("vocabulary");
+  const [activeTab, setActiveTab] = useState<"vocabulary" | "phrases">(
+    "vocabulary"
+  );
 
   // Mock vocabulary data
   const vocabularyItems: VocabularyItem[] = [
@@ -154,16 +154,6 @@ export default function LessonContent({
             >
               Phrases
             </button>
-            <button
-              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === "practice"
-                  ? "border-amber-500 text-amber-600 dark:text-amber-500"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-300"
-              }`}
-              onClick={() => setActiveTab("practice")}
-            >
-              Practice
-            </button>
           </nav>
         </div>
       </div>
@@ -192,6 +182,9 @@ export default function LessonContent({
                     <button
                       className="text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 p-2 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
                       aria-label="Play pronunciation"
+                      onClick={() =>
+                        alert(`TODO: Play pronunciation for "${item.spanish}"`)
+                      }
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -242,6 +235,11 @@ export default function LessonContent({
                     <button
                       className="text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 p-2 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
                       aria-label="Play pronunciation"
+                      onClick={() =>
+                        alert(
+                          `TODO: Play pronunciation for "${phrase.spanish}"`
+                        )
+                      }
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -262,54 +260,6 @@ export default function LessonContent({
                   </p>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "practice" && (
-          <div className="space-y-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-              Practice Exercises
-            </h3>
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl text-center p-8">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-16 h-16 mx-auto text-amber-500 dark:text-amber-400 mb-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-                />
-              </svg>
-              <p className="text-2xl font-semibold mb-3 text-slate-900 dark:text-white">
-                Practice with Voice
-              </p>
-              <p className="text-slate-600 dark:text-slate-300 mb-6 max-w-md mx-auto">
-                Start speaking to practice the vocabulary and phrases from this
-                lesson with immediate feedback.
-              </p>
-              <button className="btn btn-primary rounded-full px-6 py-3 text-base flex items-center gap-2 mx-auto group">
-                Start Voice Practice
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                  className="w-5 h-5 group-hover:translate-x-1 transition-transform"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                  />
-                </svg>
-              </button>
             </div>
           </div>
         )}
