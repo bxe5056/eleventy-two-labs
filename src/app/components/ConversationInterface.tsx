@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import VoiceInteraction from "./VoiceInteraction";
+import { getApiKey } from "../utils/elevenlabs";
 
 interface Message {
   text: string;
@@ -20,6 +21,8 @@ export default function ConversationInterface() {
 
   const [currentLesson, setCurrentLesson] = useState<string | null>(null);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -27,11 +30,20 @@ export default function ConversationInterface() {
     scrollToBottom();
   }, [messages]);
 
+  // Check for agent ID on component mount
+  useEffect(() => {
+    // Get agent ID from environment variable or localStorage
+    setAgentId(getApiKey());
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const handleConversationUpdate = (message: string, isUser: boolean) => {
+    // Clear any previous errors when we get a successful conversation update
+    setError(null);
+
     setMessages((prev) => [
       ...prev,
       { text: message, isUser, timestamp: new Date() },
@@ -44,8 +56,25 @@ export default function ConversationInterface() {
     }
   };
 
+  // Handler for speech recognition errors
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage);
+  };
+
+  // Handler to retry if there was an error
+  const handleRetry = () => {
+    setError(null);
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-8 w-full max-w-6xl mx-auto">
+      {/* Agent ID Indicator (only visible in development) */}
+      {agentId && process.env.NODE_ENV === "development" && (
+        <div className="fixed top-20 right-2 z-50 bg-slate-800 text-white text-xs px-3 py-1 rounded-full shadow-md">
+          Lesson Agent ID: {agentId.slice(0, 8)}...
+        </div>
+      )}
+
       <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 md:max-h-[600px] overflow-y-auto border border-slate-200 dark:border-slate-700">
         <div className="conversation-history space-y-4">
           {messages.map((message, index) => (
@@ -91,11 +120,44 @@ export default function ConversationInterface() {
             </div>
           ))}
           <div ref={messagesEndRef} />
+
+          {/* Display error messages in the conversation */}
+          {error && (
+            <div className="error-message p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/30 rounded-lg text-red-600 dark:text-red-400 text-sm">
+              <div className="flex items-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-5 h-5 mr-2 text-red-500"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+                  />
+                </svg>
+                <span>{error}</span>
+              </div>
+              <button
+                onClick={handleRetry}
+                className="mt-2 px-3 py-1 bg-white dark:bg-red-800/30 hover:bg-red-100 dark:hover:bg-red-800/50 text-red-700 dark:text-red-300 text-xs font-medium rounded-md transition-colors w-full"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex flex-col items-center gap-6">
-        <VoiceInteraction onConversationUpdate={handleConversationUpdate} />
+        <VoiceInteraction
+          onConversationUpdate={handleConversationUpdate}
+          onError={handleError}
+          agentId={agentId || undefined}
+        />
 
         {currentLesson && (
           <div className="w-full bg-white dark:bg-slate-800 rounded-xl shadow-md p-5 border border-slate-200 dark:border-slate-700">

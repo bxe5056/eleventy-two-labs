@@ -9,87 +9,102 @@ interface ConversationalAgentProps {
 }
 
 // Define types for ElevenLabs messages
-interface TranscriptMessage {
-  type: "transcript";
-  transcript: {
-    text: string;
-    is_final: boolean;
-  };
+interface ElevenLabsMessage {
+  message: string;
+  source: "user" | "ai";
 }
 
-interface SpeechUpdateMessage {
-  type: "speech_update";
-  speech_update: {
-    text: string;
-  };
+// Message history interface
+interface MessageEntry {
+  text: string;
+  isUser: boolean;
+  translation?: string;
+  isSystemMessage?: boolean;
 }
-
-// Union type for all possible message types
-type ElevenLabsMessage = TranscriptMessage | SpeechUpdateMessage | any;
 
 export default function ConversationalAgent({
   onConversationUpdate,
 }: ConversationalAgentProps) {
   const [errorMessage, setErrorMessage] = useState("");
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [agentId, setAgentId] = useState("");
   const [transcript, setTranscript] = useState("");
+  const [translation, setTranslation] = useState("");
+  const [showTranslation, setShowTranslation] = useState(false);
   const [isPrivateAgent, setIsPrivateAgent] = useState(false);
   const [isGettingSignedUrl, setIsGettingSignedUrl] = useState(false);
+  const [messageHistory, setMessageHistory] = useState<MessageEntry[]>([]);
+  const [agentResponse, setAgentResponse] = useState("");
 
   // Initialize the conversation with ElevenLabs
   const conversation = useConversation({
-    onConnect: () => console.log("Connected to ElevenLabs"),
+    onConnect: () => {
+      console.log("Connected to ElevenLabs");
+
+      // Add a welcome message to start the conversation and ensure transcript is visible
+      // This helps in cases where the SDK doesn't immediately send a message
+      //   setTimeout(() => {
+      //     if (messageHistory.length === 0) {
+      //       console.log("onConnect: Adding initial welcome message");
+      //     //   const welcomeMessage =
+      //     //     "";
+
+      //     //   // Add the welcome message to the history
+      //     //   setMessageHistory([{ text: welcomeMessage, isUser: false }]);
+      //     //   setAgentResponse(welcomeMessage);
+
+      //     //   if (onConversationUpdate) {
+      //     //     onConversationUpdate(welcomeMessage, false);
+      //     //   }
+      //     }
+      //   }, 1000);
+    },
     onDisconnect: () => console.log("Disconnected from ElevenLabs"),
     onMessage: (message: ElevenLabsMessage) => {
-      console.log("Message:", message);
+      console.log("Message received from ElevenLabs:", message);
 
-      // Handle incoming messages
-      if (message.type === "transcript") {
-        if (message.transcript.is_final && message.transcript.text) {
-          setTranscript(message.transcript.text);
-          if (onConversationUpdate) {
-            onConversationUpdate(message.transcript.text, true);
-          }
+      if (message.message && message.source) {
+        const isUser = message.source === "user";
+        const messageText = message.message;
+
+        console.log(`${isUser ? "User" : "AI"} message:`, messageText);
+
+        if (isUser) {
+          setTranscript(messageText);
+        } else {
+          setAgentResponse(messageText);
         }
-      } else if (message.type === "speech_update") {
-        if (message.speech_update.text && onConversationUpdate) {
-          onConversationUpdate(message.speech_update.text, false);
+
+        // Add message to history
+        setMessageHistory((prev) => {
+          // Check if this exact message is already the last message from this source
+          const lastMessage = prev.length > 0 ? prev[prev.length - 1] : null;
+          if (
+            lastMessage &&
+            lastMessage.isUser === isUser &&
+            lastMessage.text === messageText
+          ) {
+            return prev; // Skip duplicate messages
+          }
+          return [...prev, { text: messageText, isUser }];
+        });
+
+        if (onConversationUpdate) {
+          onConversationUpdate(messageText, isUser);
         }
       }
     },
     onError: (message: string) => {
-      console.error("Error:", message);
+      console.error("ElevenLabs error:", message);
       setErrorMessage(`Error: ${message || "Connection failed"}`);
     },
   });
 
   // Check for API key on component mount
   useEffect(() => {
-    // First check for environment variable
+    // Only use environment variable
     const envAgentId = process.env.NEXT_PUBLIC_AGENT_ID;
-
     if (envAgentId) {
-      // If we have an environment variable, use it and don't show the input form
       setAgentId(envAgentId);
-      setShowApiKeyInput(false);
-      return;
-    }
-
-    // If no environment variable, check localStorage for agent ID
-    const storedAgentId = localStorage.getItem("elevenlabs_agent_id");
-    if (storedAgentId) {
-      setAgentId(storedAgentId);
-    } else {
-      // If no agent ID found anywhere, show the input form
-      setShowApiKeyInput(true);
-    }
-
-    // Check for stored API key
-    const storedApiKey = localStorage.getItem("elevenlabs_api_key");
-    if (!storedApiKey && !envAgentId) {
-      setShowApiKeyInput(true);
     }
 
     // Check for private agent setting
@@ -98,6 +113,65 @@ export default function ConversationalAgent({
       setIsPrivateAgent(true);
     }
   }, []);
+
+  // Add a useEffect to handle translation timer
+  useEffect(() => {
+    let translationTimer: NodeJS.Timeout;
+
+    if (transcript) {
+      // Reset translation state when new transcript comes in
+      setShowTranslation(false);
+      setTranslation("");
+
+      // Simple mock translation - in a real app, call a translation API
+      const mockTranslate = (text: string) => {
+        // Very basic Spanish to English translations for demo purposes
+        const translations: Record<string, string> = {
+          hola: "hello",
+          "buenos días": "good morning",
+          "buenas tardes": "good afternoon",
+          "buenas noches": "good night",
+          "cómo estás": "how are you",
+          "me llamo": "my name is",
+          gracias: "thank you",
+          "por favor": "please",
+          adiós: "goodbye",
+          "hasta luego": "see you later",
+        };
+
+        // Simple word replacement - just for demonstration
+        let translated = text.toLowerCase();
+        Object.entries(translations).forEach(([spanish, english]) => {
+          translated = translated.replace(new RegExp(spanish, "gi"), english);
+        });
+
+        return translated.charAt(0).toUpperCase() + translated.slice(1);
+      };
+
+      // Set timer to show translation after 20 seconds
+      translationTimer = setTimeout(() => {
+        const translatedText = mockTranslate(transcript);
+        setTranslation(translatedText);
+        setShowTranslation(true);
+
+        // Update the last user message with translation
+        setMessageHistory((prev) => {
+          const updated = [...prev];
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].isUser) {
+              updated[i] = { ...updated[i], translation: translatedText };
+              break;
+            }
+          }
+          return updated;
+        });
+      }, 20000);
+    }
+
+    return () => {
+      if (translationTimer) clearTimeout(translationTimer);
+    };
+  }, [transcript]);
 
   // Get a signed URL for private agents
   const getSignedUrl = async (): Promise<string> => {
@@ -127,6 +201,7 @@ export default function ConversationalAgent({
 
   const startConversation = useCallback(async () => {
     setErrorMessage("");
+    console.log("Starting conversation with agent ID:", agentId);
 
     try {
       // Request microphone permission
@@ -134,29 +209,40 @@ export default function ConversationalAgent({
 
       if (!agentId) {
         setErrorMessage(
-          "Agent ID is required. Please enter it in the settings below."
+          "Agent ID is not available. Please add NEXT_PUBLIC_AGENT_ID to your environment variables."
         );
         return;
+      }
+
+      // Add a session start delimiter if there are previous messages
+      if (messageHistory.length > 0) {
+        const sessionStartTime = new Date().toLocaleTimeString();
+        setMessageHistory((prev) => [
+          ...prev,
+          {
+            text: `New session started at ${sessionStartTime}`,
+            isUser: false,
+            isSystemMessage: true,
+          },
+        ]);
       }
 
       // For private agents, get a signed URL
       if (isPrivateAgent) {
         try {
           const signedUrl = await getSignedUrl();
+          console.log("Starting session with signed URL");
           await conversation.startSession({
             signedUrl,
-            authorization:
-              localStorage.getItem("elevenlabs_api_key") || undefined,
           });
         } catch (error) {
           return; // Error is already handled in getSignedUrl
         }
       } else {
         // For public agents, use the agent ID directly
+        console.log("Starting session with agent ID");
         await conversation.startSession({
           agentId,
-          authorization:
-            localStorage.getItem("elevenlabs_api_key") || undefined,
         });
       }
     } catch (error) {
@@ -167,179 +253,147 @@ export default function ConversationalAgent({
         }`
       );
     }
-  }, [conversation, agentId, isPrivateAgent]);
+  }, [
+    conversation,
+    agentId,
+    isPrivateAgent,
+    messageHistory.length,
+    onConversationUpdate,
+  ]);
 
   const stopConversation = useCallback(async () => {
     try {
       await conversation.endSession();
+
+      // Add a session delimiter to the transcript
+      const sessionEndTime = new Date().toLocaleTimeString();
+      setMessageHistory((prev) => [
+        ...prev,
+        {
+          text: `Session ended at ${sessionEndTime}`,
+          isUser: false,
+          isSystemMessage: true,
+        },
+      ]);
     } catch (error) {
       console.error("Failed to end conversation:", error);
     }
   }, [conversation]);
 
-  const handleSaveApiKey = () => {
-    if (!apiKeyInput.trim()) {
-      setErrorMessage("Please enter a valid API key");
-      return;
-    }
-
-    // Save the API key to localStorage only - we'll use it when starting the session
-    localStorage.setItem("elevenlabs_api_key", apiKeyInput.trim());
-
-    setShowApiKeyInput(false);
-    setApiKeyInput("");
-    setErrorMessage("");
-  };
-
-  const handleSaveAgentId = (id: string) => {
-    if (id.trim()) {
-      localStorage.setItem("elevenlabs_agent_id", id.trim());
-      setAgentId(id.trim());
-    }
-  };
-
-  const handleTogglePrivateAgent = (isPrivate: boolean) => {
-    setIsPrivateAgent(isPrivate);
-    localStorage.setItem(
-      "elevenlabs_is_private_agent",
-      isPrivate ? "true" : "false"
-    );
-  };
+  // Calculate layout classes based on whether transcript is showing
+  const hasTranscript =
+    messageHistory.length > 0 ||
+    errorMessage ||
+    conversation.status === "connected";
+  const containerClasses = `voice-interaction flex ${
+    hasTranscript ? "flex-col md:flex-row items-start" : "flex-col items-center"
+  } gap-8 w-full max-w-6xl mx-auto`;
 
   return (
-    <div className="voice-interaction flex flex-col items-center">
-      {showApiKeyInput ? (
-        <div className="api-key-form mb-6 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm text-center max-w-md w-full">
-          <h3 className="text-lg font-medium mb-3">
-            ElevenLabs API Key Required
-          </h3>
-          <p className="text-slate-600 dark:text-slate-400 mb-4">
-            Please enter your ElevenLabs API key to use the voice features.
-          </p>
-          <input
-            type="password"
-            value={apiKeyInput}
-            onChange={(e) => setApiKeyInput(e.target.value)}
-            placeholder="Enter your API key"
-            className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md mb-3 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200"
-          />
-          <div className="mb-3">
-            <input
-              type="text"
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
-              placeholder="Enter your Agent ID (required)"
-              className="w-full px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200"
-            />
-          </div>
-          <div className="mb-4 flex items-center">
-            <input
-              type="checkbox"
-              id="private-agent"
-              checked={isPrivateAgent}
-              onChange={(e) => setIsPrivateAgent(e.target.checked)}
-              className="mr-2"
-            />
-            <label
-              htmlFor="private-agent"
-              className="text-sm text-slate-600 dark:text-slate-400"
-            >
-              This is a private agent (requires server-side API key)
-            </label>
-          </div>
-          <button
-            onClick={handleSaveApiKey}
-            className="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-2 px-4 rounded-md transition-colors"
-          >
-            Save Settings
-          </button>
-        </div>
-      ) : (
-        <>
-          <button
-            onClick={
+    <div className={containerClasses}>
+      <div
+        className={`flex flex-col items-center ${
+          hasTranscript ? "" : "mx-auto"
+        }`}
+      >
+        <button
+          onClick={
+            conversation.status === "connected"
+              ? stopConversation
+              : startConversation
+          }
+          disabled={conversation.status === "connecting" || isGettingSignedUrl}
+          className={`pulse-button relative outline-none focus:ring-4 focus:ring-amber-300/50 dark:focus:ring-amber-700/50
+            ${
               conversation.status === "connected"
-                ? stopConversation
-                : startConversation
-            }
-            disabled={
-              conversation.status === "connecting" || isGettingSignedUrl
-            }
-            className={`pulse-button relative outline-none focus:ring-4 focus:ring-amber-300/50 dark:focus:ring-amber-700/50
-              ${
-                conversation.status === "connected"
-                  ? "bg-red-500 hover:bg-red-600"
-                  : "bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-600 hover:to-red-600"
-              } 
-              text-white text-lg font-medium rounded-full p-4 w-56 h-56 md:w-64 md:h-64 flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}
-            aria-label={
-              conversation.status === "connected"
-                ? "Stop conversation"
-                : "Start conversation"
-            }
-          >
-            <div className="text-center">
-              {conversation.status === "connected" ? (
-                <>
-                  <div className="flex items-center justify-center space-x-1 mb-2">
-                    <div
-                      className="w-2 h-8 bg-white rounded-full animate-pulse"
-                      style={{ animationDelay: "0ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-12 bg-white rounded-full animate-pulse"
-                      style={{ animationDelay: "300ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-6 bg-white rounded-full animate-pulse"
-                      style={{ animationDelay: "600ms" }}
-                    ></div>
-                    <div
-                      className="w-2 h-10 bg-white rounded-full animate-pulse"
-                      style={{ animationDelay: "900ms" }}
-                    ></div>
-                  </div>
-                  <span className="block">
-                    {conversation.isSpeaking ? "Speaking..." : "Listening..."}
-                  </span>
-                </>
-              ) : conversation.status === "connecting" || isGettingSignedUrl ? (
-                <>
-                  <div className="w-10 h-10 border-4 border-white rounded-full border-t-transparent animate-spin mx-auto mb-2"></div>
-                  <span className="block">
-                    {isGettingSignedUrl ? "Getting URL..." : "Connecting..."}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-16 h-16 mx-auto mb-2"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
-                    />
-                  </svg>
-                  <span className="block">Start Conversation</span>
-                </>
-              )}
-            </div>
-          </button>
+                ? "bg-red-500 hover:bg-red-600"
+                : "bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-600 hover:to-red-600"
+            } 
+            text-white text-lg font-medium rounded-full p-4 w-56 h-56 md:w-64 md:h-64 flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}
+          aria-label={
+            conversation.status === "connected"
+              ? "Stop conversation"
+              : "Start conversation"
+          }
+        >
+          <div className="text-center">
+            {conversation.status === "connected" ? (
+              <>
+                <div className="flex items-center justify-center space-x-1 mb-2">
+                  <div
+                    className="w-2 h-8 bg-white rounded-full animate-pulse"
+                    style={{ animationDelay: "0ms" }}
+                  ></div>
+                  <div
+                    className="w-2 h-12 bg-white rounded-full animate-pulse"
+                    style={{ animationDelay: "300ms" }}
+                  ></div>
+                  <div
+                    className="w-2 h-6 bg-white rounded-full animate-pulse"
+                    style={{ animationDelay: "600ms" }}
+                  ></div>
+                  <div
+                    className="w-2 h-10 bg-white rounded-full animate-pulse"
+                    style={{ animationDelay: "900ms" }}
+                  ></div>
+                </div>
+                <span className="block">
+                  {conversation.isSpeaking ? "Speaking..." : "Listening..."}
+                </span>
+                <span className="text-sm mt-1 block">
+                  {conversation.isSpeaking
+                    ? "Wait to Respond"
+                    : "Click to End Session"}
+                </span>
+              </>
+            ) : conversation.status === "connecting" || isGettingSignedUrl ? (
+              <>
+                <div className="w-10 h-10 border-4 border-white rounded-full border-t-transparent animate-spin mx-auto mb-2"></div>
+                <span className="block">
+                  {isGettingSignedUrl ? "Getting URL..." : "Connecting..."}
+                </span>
+              </>
+            ) : (
+              <>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-16 h-16 mx-auto mb-2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z"
+                  />
+                </svg>
+                <span className="block">Start Conversation</span>
+                <span className="text-sm mt-1 block">
+                  Click to Begin Spanish Practice
+                </span>
+              </>
+            )}
+          </div>
+        </button>
 
-          <div className="mt-3 text-sm text-slate-600">
-            Status: {conversation.status}
-            {conversation.status === "connected" &&
-              ` • ${conversation.isSpeaking ? "Speaking" : "Listening"}`}
-          </div>
+        <div className="mt-3 text-sm text-slate-600">
+          Status: {conversation.status}
+          {conversation.status === "connected" &&
+            ` • ${conversation.isSpeaking ? "Speaking" : "Listening"}`}
+        </div>
+      </div>
+
+      {/* Transcript Panel - Now displayed side by side with the button on larger screens */}
+      {hasTranscript && (
+        <div className="transcript-panel flex-1 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-md text-left max-w-md w-full min-h-[250px] flex flex-col">
+          <h3 className="text-lg font-medium mb-3 text-slate-900 dark:text-white">
+            Conversation
+          </h3>
 
           {errorMessage && (
-            <div className="error-message mt-4 text-red-600 text-center p-3 bg-red-50 border border-red-200 rounded-lg max-w-md w-full">
+            <div className="error-message mb-4 text-red-600 text-sm p-3 bg-red-50 border border-red-200 rounded-lg">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -358,78 +412,123 @@ export default function ConversationalAgent({
             </div>
           )}
 
-          {transcript && (
-            <div className="transcript mt-6 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm text-center max-w-md w-full">
-              <p className="font-medium text-slate-700 dark:text-slate-300 mb-2">
-                You said:
-              </p>
-              <p className="italic text-slate-800 dark:text-slate-200 text-lg">
-                {transcript}
-              </p>
-            </div>
-          )}
-
-          {/* Agent configuration */}
-          <div className="agent-config mt-6 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm text-center max-w-md w-full">
-            <div className="flex flex-col space-y-4">
-              <div>
-                <label className="text-sm text-slate-600 dark:text-slate-400 block mb-1 text-left">
-                  Agent ID{" "}
-                  {process.env.NEXT_PUBLIC_AGENT_ID ? "(from .env.local)" : ""}
-                </label>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={agentId}
-                    onChange={(e) => setAgentId(e.target.value)}
-                    placeholder="Enter Agent ID"
-                    className="flex-grow px-3 py-1 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm"
-                    disabled={!!process.env.NEXT_PUBLIC_AGENT_ID}
-                  />
-                  <button
-                    onClick={() => handleSaveAgentId(agentId)}
-                    className={`px-3 py-1 ${
-                      process.env.NEXT_PUBLIC_AGENT_ID
-                        ? "bg-slate-400 cursor-not-allowed"
-                        : "bg-amber-500 hover:bg-amber-600"
-                    } text-white text-sm font-medium rounded-md transition-colors`}
-                    disabled={!!process.env.NEXT_PUBLIC_AGENT_ID}
+          <div className="flex-1 overflow-y-auto conversation-thread">
+            {/* Message history */}
+            {messageHistory.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${
+                  message.isSystemMessage
+                    ? "justify-center"
+                    : message.isUser
+                    ? "justify-end"
+                    : "justify-start"
+                } mb-3`}
+              >
+                {message.isSystemMessage ? (
+                  <div className="text-center text-xs text-slate-500 bg-slate-100 dark:bg-slate-700 dark:text-slate-400 px-3 py-1 rounded-full">
+                    {message.text}
+                  </div>
+                ) : (
+                  <div
+                    className={`message-bubble ${
+                      message.isUser ? "user-message" : "agent-message"
+                    }`}
                   >
-                    Save
-                  </button>
-                </div>
-                {process.env.NEXT_PUBLIC_AGENT_ID && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 text-left">
-                    Using agent ID from environment variables
-                  </p>
+                    <p
+                      className={
+                        message.isUser
+                          ? "text-white"
+                          : "text-slate-800 dark:text-slate-200"
+                      }
+                    >
+                      {message.text}
+                    </p>
+                    {message.isUser && message.translation && (
+                      <p className="text-white/80 text-sm pt-1 border-t border-white/20 mt-1 italic">
+                        {message.translation}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
+            ))}
 
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="settings-private-agent"
-                  checked={isPrivateAgent}
-                  onChange={(e) => handleTogglePrivateAgent(e.target.checked)}
-                  className="mr-2"
-                />
-                <label
-                  htmlFor="settings-private-agent"
-                  className="text-sm text-slate-600 dark:text-slate-400 text-left"
-                >
-                  Private agent (requires server-side API key)
-                </label>
+            {/* Show a placeholder when connected but no messages */}
+            {conversation.status === "connected" &&
+              messageHistory.length === 0 && (
+                <div className="flex justify-start mb-3">
+                  <div className="message-bubble agent-message">
+                    <div className="flex items-center space-x-1">
+                      <div
+                        className="w-1 h-2 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                        style={{ animationDelay: "0ms" }}
+                      ></div>
+                      <div
+                        className="w-1 h-3 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                        style={{ animationDelay: "300ms" }}
+                      ></div>
+                      <div
+                        className="w-1 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                        style={{ animationDelay: "600ms" }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Typing indicator when agent is speaking */}
+            {conversation.isSpeaking && agentResponse && (
+              <div className="flex justify-start mb-3">
+                <div className="message-bubble agent-message">
+                  <div className="flex items-center space-x-1">
+                    <div
+                      className="w-1 h-2 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                      style={{ animationDelay: "0ms" }}
+                    ></div>
+                    <div
+                      className="w-1 h-3 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                      style={{ animationDelay: "300ms" }}
+                    ></div>
+                    <div
+                      className="w-1 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                      style={{ animationDelay: "600ms" }}
+                    ></div>
+                  </div>
+                </div>
               </div>
+            )}
 
-              <button
-                onClick={() => setShowApiKeyInput(true)}
-                className="mt-2 px-3 py-1 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-sm font-medium rounded-md transition-colors w-full"
-              >
-                Edit API Settings
-              </button>
-            </div>
+            {/* Translation indicator */}
+            {transcript &&
+              !showTranslation &&
+              messageHistory.some((m) => m.isUser) && (
+                <div className="text-xs text-slate-500 mt-2 flex items-center justify-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-3 w-3 text-amber-500"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Translation will appear shortly...
+                </div>
+              )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

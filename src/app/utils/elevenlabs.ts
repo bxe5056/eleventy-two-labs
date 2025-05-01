@@ -13,31 +13,16 @@ const MODELS_ENDPOINT = "/models";
 const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Example voice ID - replace with actual voice ID
 
 /**
- * Get API key from environment variable or local storage
+ * Get API key from environment variable
  */
 export const getApiKey = (): string => {
-  // Try to get from environment variable first
+  // Try to get from environment variable
   const envApiKey = process.env.NEXT_PUBLIC_AGENT_ID;
 
   // If environment variable exists, use it
   if (envApiKey) return envApiKey;
 
-  // Otherwise, check localStorage as fallback
-  if (typeof window !== "undefined") {
-    const localStorageKey = localStorage.getItem("elevenlabs_api_key");
-    if (localStorageKey) return localStorageKey;
-  }
-
   return "";
-};
-
-/**
- * Save API key to localStorage
- */
-export const saveApiKey = (apiKey: string): void => {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("elevenlabs_api_key", apiKey);
-  }
 };
 
 /**
@@ -53,13 +38,15 @@ export const hasApiKey = (): boolean => {
 export const textToSpeech = async (
   text: string,
   voiceId: string = DEFAULT_VOICE_ID,
-  modelId: string = "eleven_multilingual_v2"
+  modelId: string = "eleven_multilingual_v2",
+  explicitAgentId?: string
 ): Promise<ArrayBuffer> => {
-  const apiKey = getApiKey();
+  // Use explicitly provided agent ID if available, otherwise use the default getter
+  const apiKey = explicitAgentId || getApiKey();
 
   if (!apiKey) {
     throw new Error(
-      "ElevenLabs API key is not set. Please check your NEXT_PUBLIC_AGENT_ID environment variable or set an API key manually."
+      "ElevenLabs API key is not set. Please check your NEXT_PUBLIC_AGENT_ID environment variable."
     );
   }
 
@@ -143,7 +130,7 @@ export const generateTutorResponse = async (
 /**
  * Set up the ElevenLabs speech recognition
  */
-export const setupSpeechRecognition = (): SpeechRecognition | null => {
+export const setupSpeechRecognition = (): any => {
   if (typeof window === "undefined") return null;
 
   // Browser compatibility check
@@ -155,12 +142,20 @@ export const setupSpeechRecognition = (): SpeechRecognition | null => {
     return null;
   }
 
-  const recognition = new SpeechRecognition();
+  try {
+    const recognition = new SpeechRecognition();
 
-  // Configure speech recognition
-  recognition.lang = "es-ES"; // Set language to Spanish
-  recognition.continuous = false;
-  recognition.interimResults = false;
+    // Configure speech recognition
+    recognition.lang = "es-ES"; // Set language to Spanish
+    recognition.continuous = false;
+    recognition.interimResults = false;
 
-  return recognition;
+    // Set a timeout to avoid hanging indefinitely on network issues
+    recognition.maxAlternatives = 1;
+
+    return recognition;
+  } catch (error) {
+    console.error("Failed to create speech recognition instance:", error);
+    return null;
+  }
 };
