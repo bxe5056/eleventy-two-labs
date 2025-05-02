@@ -2,7 +2,6 @@
 
 import { useConversation } from "@11labs/react";
 import { useCallback, useState, useEffect } from "react";
-import { getApiKey } from "../utils/elevenlabs";
 
 interface ConversationalAgentProps {
   onConversationUpdate?: (message: string, isUser: boolean) => void;
@@ -105,8 +104,6 @@ export default function ConversationalAgent({
   const [errorMessage, setErrorMessage] = useState("");
   const [agentId, setAgentId] = useState("");
   const [transcript, setTranscript] = useState("");
-  const [translation, setTranslation] = useState("");
-  const [showTranslation, setShowTranslation] = useState(false);
   const [isPrivateAgent, setIsPrivateAgent] = useState(false);
   const [isGettingSignedUrl, setIsGettingSignedUrl] = useState(false);
   const [messageHistory, setMessageHistory] = useState<MessageEntry[]>([]);
@@ -277,7 +274,7 @@ export default function ConversationalAgent({
   }, [transcript]);
 
   // Get a signed URL for private agents
-  const getSignedUrl = async (): Promise<string> => {
+  const getSignedUrl = useCallback(async (): Promise<string> => {
     setIsGettingSignedUrl(true);
     try {
       const response = await fetch(`/api/get-signed-url?agent_id=${agentId}`);
@@ -300,7 +297,7 @@ export default function ConversationalAgent({
       );
       throw error;
     }
-  };
+  }, [agentId]);
 
   const startConversation = useCallback(async () => {
     setErrorMessage("");
@@ -338,8 +335,8 @@ export default function ConversationalAgent({
           await conversation.startSession({
             signedUrl,
           });
-        } catch (error) {
-          return; // Error is already handled in getSignedUrl
+        } catch {
+          return; // The error is already handled in getSignedUrl
         }
       } else {
         // For public agents, use the agent ID directly
@@ -356,13 +353,7 @@ export default function ConversationalAgent({
         }`
       );
     }
-  }, [
-    conversation,
-    agentId,
-    isPrivateAgent,
-    messageHistory.length,
-    onConversationUpdate,
-  ]);
+  }, [agentId, messageHistory.length, isPrivateAgent, conversation, getSignedUrl]);
 
   const stopConversation = useCallback(async () => {
     try {

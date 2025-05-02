@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
 import ConversationalAgent from "./components/ConversationalAgent";
 import { getApiKey } from "./utils/elevenlabs";
 import Link from "next/link";
@@ -118,7 +117,7 @@ export default function Home() {
       <section className="pt-20 pb-32 px-4 md:px-8">
         <div className="max-w-6xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-amber-500 to-red-600 bg-clip-text text-transparent leading-tight">
-            ¡Hola! Welcome to SpanishVoice
+            &iexcl;Hola! Welcome to SpanishVoice
           </h1>
           <p className="text-xl md:text-2xl mb-12 text-slate-700 dark:text-slate-300 max-w-3xl mx-auto">
             Learn Spanish through natural conversation with our voice-first
@@ -221,7 +220,7 @@ export default function Home() {
                             d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
                           />
                         </svg>
-                        <span>10-15 min</span>
+                        <span>10&ndash;15 min</span>
                       </span>
                     </div>
                   </div>
@@ -353,7 +352,7 @@ export default function Home() {
               </h3>
               <p className="text-slate-600 dark:text-slate-300 max-w-xs">
                 Engage in a natural conversation with our voice assistant to
-                practice what you've learned
+                practice what you&apos;ve learned
               </p>
             </div>
 

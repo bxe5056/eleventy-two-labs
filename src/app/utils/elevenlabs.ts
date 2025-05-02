@@ -7,7 +7,6 @@
 // API endpoints
 const API_BASE_URL = "https://api.elevenlabs.io/v1";
 const TEXT_TO_SPEECH_ENDPOINT = "/text-to-speech";
-const MODELS_ENDPOINT = "/models";
 
 // Default voice ID for Spanish instructor
 const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // Example voice ID - replace with actual voice ID
@@ -130,7 +129,7 @@ export const generateTutorResponse = async (
 /**
  * Set up the ElevenLabs speech recognition
  */
-export const setupSpeechRecognition = (): any => {
+export const setupSpeechRecognition = () => {
   if (typeof window === "undefined") return null;
 
   // Browser compatibility check
@@ -153,7 +152,7 @@ export const setupSpeechRecognition = (): any => {
     // Set a timeout to avoid hanging indefinitely on network issues
     recognition.maxAlternatives = 1;
 
-    return recognition;
+    return recognition as unknown as typeof SpeechRecognition;
   } catch (error) {
     console.error("Failed to create speech recognition instance:", error);
     return null;

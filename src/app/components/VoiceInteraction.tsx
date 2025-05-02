@@ -1,39 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  getApiKey,
-  hasApiKey,
-  playAudio,
-  setupSpeechRecognition,
-  textToSpeech,
-} from "../utils/elevenlabs";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getApiKey, playAudio, textToSpeech } from "../utils/elevenlabs";
 
 interface VoiceInteractionProps {
   onConversationUpdate?: (message: string, isUser: boolean) => void;
   onError?: (errorMessage: string) => void;
   agentId?: string;
-}
-
-// Define SpeechRecognition types properly
-declare global {
-  interface Window {
-    SpeechRecognition: any;
-    webkitSpeechRecognition: any;
-  }
-}
-
-// Simple interface for SpeechRecognition to use with our ref
-interface SpeechRecognitionInstance {
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: any) => void) | null;
-  onerror: ((event: any) => void) | null;
-  onend: (() => void) | null;
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
 }
 
 // Message history interface
@@ -43,6 +16,19 @@ interface MessageEntry {
   translation?: string;
 }
 
+// Define event interfaces for speech recognition
+interface SpeechRecognitionResultList {
+  [index: number]: { [index: number]: { transcript: string } };
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
 export default function VoiceInteraction({
   onConversationUpdate,
   onError,
@@ -50,16 +36,129 @@ export default function VoiceInteraction({
 }: VoiceInteractionProps) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [translation, setTranslation] = useState("");
+  const [, setTranslation] = useState("");
   const [showTranslation, setShowTranslation] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const [localAgentId, setLocalAgentId] = useState<string | null>(null);
   const [messageHistory, setMessageHistory] = useState<MessageEntry[]>([]);
-  // Using any type to avoid TypeScript issues with SpeechRecognition
-  const recognitionRef = useRef<any>(null);
+  // Define a simple interface that matches what we need from SpeechRecognition
+  interface SpeechRecognitionInstance {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    start(): void;
+    stop(): void;
+    onresult: ((event: SpeechRecognitionEvent) => void) | null;
+    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+    onend: (() => void) | null;
+  }
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Handle ElevenLabs response
+  const handleElevenLabsResponse = useCallback(
+    async (userInput: string) => {
+      try {
+        setIsProcessing(true);
+
+        const audioData = await textToSpeech(
+          userInput,
+          undefined,
+          undefined,
+          propAgentId || localAgentId || undefined
+        );
+
+        audioRef.current = playAudio(audioData);
+
+        setIsProcessing(false);
+      } catch (error) {
+        console.error("ElevenLabs error:", error);
+        setErrorMessage(
+          `Error processing speech: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+        setIsProcessing(false);
+      }
+    },
+    [propAgentId, localAgentId]
+  );
+
+  // Initialize speech recognition with a retry mechanism
+  const initSpeechRecognition = useCallback(() => {
+    const ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!ctor) throw new Error("no speech API");
+    const recognition = new ctor() as unknown as SpeechRecognitionInstance;
+
+    recognition.lang = "es-ES";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognitionRef.current = recognition;
+    return true;
+  }, []);
+
+  // Setup event handlers for speech recognition
+  const setupRecognitionEventHandlers = useCallback(() => {
+    const recognition = recognitionRef.current as SpeechRecognitionInstance;
+    if (!recognition) return;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const result = event.results[0][0].transcript;
+      setTranscript(result);
+
+      setMessageHistory((prev) => [...prev, { text: result, isUser: true }]);
+      onConversationUpdate?.(result, true);
+      setRetryCount(0);
+      setIsListening(false);
+      handleElevenLabsResponse(result);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error("Speech recognition error", event.error);
+
+      if (event.error === "network") {
+        const newRetryCount = retryCount + 1;
+        setRetryCount(newRetryCount);
+
+        if (newRetryCount <= 3) {
+          setErrorMessage(`Network error. Retrying (${newRetryCount}/3)...`);
+          setTimeout(() => {
+            stopListening();
+            if (initSpeechRecognition()) {
+              setupRecognitionEventHandlers();
+              const recognition = recognitionRef.current;
+              if (recognition) {
+                (recognition as SpeechRecognitionInstance).start();
+              }
+              setIsListening(true);
+            }
+          }, 1000);
+        } else {
+          setIsListening(false);
+          setErrorMessage(
+            `Speech recognition network error. Please check your internet connection and try again.`
+          );
+        }
+      } else {
+        setIsListening(false);
+        setErrorMessage(`Speech recognition error: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      if (retryCount === 0) {
+        setIsListening(false);
+      }
+    };
+  }, [
+    retryCount,
+    onConversationUpdate,
+    handleElevenLabsResponse,
+    initSpeechRecognition,
+  ]);
 
   // Set up error message handling
   useEffect(() => {
@@ -68,99 +167,11 @@ export default function VoiceInteraction({
     }
   }, [errorMessage, onError]);
 
-  // Initialize speech recognition with a retry mechanism
-  const initSpeechRecognition = () => {
-    if (typeof window !== "undefined") {
-      const recognition = setupSpeechRecognition();
-
-      if (recognition) {
-        recognitionRef.current = recognition;
-
-        // Set up event handlers
-        setupRecognitionEventHandlers();
-        return true;
-      }
-    }
-    return false;
-  };
-
-  // Setup event handlers for speech recognition
-  const setupRecognitionEventHandlers = () => {
-    if (!recognitionRef.current) return;
-
-    recognitionRef.current.onresult = (event: any) => {
-      const result = event.results[0][0].transcript;
-      setTranscript(result);
-
-      // Add user message to conversation history
-      setMessageHistory((prev) => [...prev, { text: result, isUser: true }]);
-
-      // Update conversation if callback exists
-      if (onConversationUpdate) {
-        onConversationUpdate(result, true);
-      }
-
-      // Reset retry count on successful result
-      setRetryCount(0);
-
-      // Stop listening and process with ElevenLabs
-      setIsListening(false);
-      handleElevenLabsResponse(result);
-    };
-
-    recognitionRef.current.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-
-      // Handle network errors with retry logic
-      if (event.error === "network") {
-        // Increment retry count
-        const newRetryCount = retryCount + 1;
-        setRetryCount(newRetryCount);
-
-        if (newRetryCount <= 3) {
-          // Try to restart recognition after a short delay
-          setErrorMessage(`Network error. Retrying (${newRetryCount}/3)...`);
-          setTimeout(() => {
-            try {
-              stopListening();
-              // Re-init the recognition engine
-              if (initSpeechRecognition() && recognitionRef.current) {
-                recognitionRef.current.start();
-                setIsListening(true);
-              }
-            } catch (err) {
-              console.error("Failed to restart speech recognition:", err);
-              setIsListening(false);
-              setErrorMessage(
-                `Speech recognition failed after retries. Please try again later.`
-              );
-            }
-          }, 1000);
-        } else {
-          // After 3 retries, show a more helpful error message
-          setIsListening(false);
-          setErrorMessage(
-            `Speech recognition network error. Please check your internet connection and try again.`
-          );
-        }
-      } else {
-        // For other errors, just show the message
-        setIsListening(false);
-        setErrorMessage(`Speech recognition error: ${event.error}`);
-      }
-    };
-
-    recognitionRef.current.onend = () => {
-      // Only set to false if we're not in the middle of a retry
-      if (retryCount === 0) {
-        setIsListening(false);
-      }
-    };
-  };
-
-  // Initialize speech recognition on component mount and check for agent ID
+  // Initialize speech recognition on component mount
   useEffect(() => {
-    initSpeechRecognition();
+    if (initSpeechRecognition()) {
+      setupRecognitionEventHandlers();
+    }
 
     // If a specific agent ID is passed as prop, use it first
     if (propAgentId) {
@@ -174,19 +185,21 @@ export default function VoiceInteraction({
       setLocalAgentId(apiKey);
     }
 
+    // Cleanup function
     return () => {
-      // Cleanup
-      if (recognitionRef.current) {
-        recognitionRef.current.onresult = null;
-        recognitionRef.current.onerror = null;
-        recognitionRef.current.onend = null;
+      const recognition = recognitionRef.current;
+      if (recognition) {
+        const instance = recognition as SpeechRecognitionInstance;
+        instance.onresult = null;
+        instance.onerror = null;
+        instance.onend = null;
       }
 
       if (audioRef.current) {
         audioRef.current.pause();
       }
     };
-  }, [propAgentId]);
+  }, [propAgentId, initSpeechRecognition, setupRecognitionEventHandlers]);
 
   // Add translation timer effect
   useEffect(() => {
@@ -278,7 +291,7 @@ export default function VoiceInteraction({
 
     try {
       if (recognitionRef.current) {
-        recognitionRef.current.start();
+        (recognitionRef.current as SpeechRecognitionInstance).start();
         setIsListening(true);
       } else {
         setErrorMessage(
@@ -292,16 +305,17 @@ export default function VoiceInteraction({
       if (err instanceof DOMException && err.name === "InvalidStateError") {
         // The recognition is likely in a bad state, let's reset it
         if (recognitionRef.current) {
-          recognitionRef.current.onresult = null;
-          recognitionRef.current.onerror = null;
-          recognitionRef.current.onend = null;
+          const instance = recognitionRef.current as SpeechRecognitionInstance;
+          instance.onresult = null;
+          instance.onerror = null;
+          instance.onend = null;
         }
         recognitionRef.current = null;
 
         // Reinitialize and try again
         if (initSpeechRecognition() && recognitionRef.current) {
           try {
-            recognitionRef.current.start();
+            (recognitionRef.current as SpeechRecognitionInstance).start();
             setIsListening(true);
             return;
           } catch (secondErr) {
@@ -322,43 +336,12 @@ export default function VoiceInteraction({
   const stopListening = () => {
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.stop();
+        (recognitionRef.current as SpeechRecognitionInstance).stop();
       } catch (err) {
         console.error("Error stopping recognition:", err);
       }
     }
     setIsListening(false);
-  };
-
-  const handleElevenLabsResponse = async (userInput: string) => {
-    try {
-      setIsProcessing(true);
-
-      // When using ElevenLabs conversational SDK, we don't need to manually generate responses
-      // The API will handle the conversation flow and send responses via the onMessage callback
-      // Here we're just requesting audio for the response from the text-to-speech endpoint
-
-      // We can still convert the user's input to speech if needed using ElevenLabs TTS
-      const audioData = await textToSpeech(
-        userInput, // For testing purposes, we're echoing the user's input
-        undefined, // Use default voice ID
-        undefined, // Use default model ID
-        propAgentId || localAgentId || undefined // Pass agent ID if available
-      );
-
-      // Play the audio
-      audioRef.current = playAudio(audioData);
-
-      setIsProcessing(false);
-    } catch (error) {
-      console.error("ElevenLabs error:", error);
-      setErrorMessage(
-        `Error processing speech: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-      setIsProcessing(false);
-    }
   };
 
   // Add a retry button

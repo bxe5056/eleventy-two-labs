@@ -19,7 +19,7 @@ export default function ConversationInterface() {
     },
   ]);
 
-  const [currentLesson, setCurrentLesson] = useState<string | null>(null);
+  const [currentLesson, ] = useState<string | null>(null);
   const [currentExercise, setCurrentExercise] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);

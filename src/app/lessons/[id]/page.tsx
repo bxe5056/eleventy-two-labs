@@ -4,19 +4,12 @@ import React, { use } from "react";
 import Link from "next/link";
 import ConversationalAgent from "@/app/components/ConversationalAgent";
 import LessonContent from "@/app/components/LessonContent";
+import {Lesson} from "@/app/lessons/page";
 
 interface LessonPageProps {
   params: Promise<{
     id: string;
   }>;
-}
-
-interface Lesson {
-  id: string;
-  title: string;
-  category: string;
-  level: "beginner" | "intermediate" | "advanced";
-  description: string;
 }
 
 // Mock lessons data - same as the home page
@@ -94,7 +87,7 @@ export default function LessonPage({ params }: LessonPageProps) {
             Lesson Not Found
           </h1>
           <p className="mb-8 text-slate-600 dark:text-slate-300">
-            We couldn't find the lesson you're looking for.
+            We couldn&#39;t find the lesson you&#39;re looking for.
           </p>
           <Link
             href="/#lessons-section"
