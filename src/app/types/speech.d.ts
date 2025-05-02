@@ -41,9 +41,6 @@ declare global {
     new (): SpeechRecognition;
   }
 
-  // Declare the global variable
-  const SpeechRecognition: SpeechRecognitionConstructor;
-
   // Extend the Window interface
   interface Window {
     SpeechRecognition: SpeechRecognitionConstructor;
@@ -86,5 +83,3 @@ interface SpeechGrammarList {
   item(index: number): SpeechGrammar;
   [index: number]: SpeechGrammar;
 }
-
-// No exports, this file contains global ambient declarations.

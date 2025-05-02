@@ -62,6 +62,10 @@ const lessons: Lesson[] = [
 
 export default function LessonPage({ params }: LessonPageProps) {
   // Unwrap the params Promise using React.use()
+  // React.use() can be used to handle promises directly within a component.
+  // When a promise is passed to use(), React will suspend the component's
+  // rendering until the promise resolves. Once the promise resolves,
+  // the component will resume rendering with the resolved value.
   const resolvedParams = use(params);
   const lesson = lessons.find((l) => l.id === resolvedParams.id);
 

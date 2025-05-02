@@ -3,61 +3,103 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getApiKey, playAudio, textToSpeech } from "../utils/elevenlabs";
 
+/**
+ * Props for VoiceInteraction component
+ * @property {function} [onConversationUpdate] - Callback when conversation changes
+ * @property {function} [onError] - Callback for error handling
+ * @property {string} [agentId] - Optional ElevenLabs agent ID
+ */
 interface VoiceInteractionProps {
   onConversationUpdate?: (message: string, isUser: boolean) => void;
   onError?: (errorMessage: string) => void;
   agentId?: string;
 }
 
-// Message history interface
+/**
+ * Interface for message entries in conversation history
+ * @property {string} text - The message text content
+ * @property {boolean} isUser - Whether message is from user (true) or AI (false)
+ * @property {string} [translation] - Optional translation of the message
+ */
 interface MessageEntry {
   text: string;
   isUser: boolean;
   translation?: string;
 }
 
-// Define event interfaces for speech recognition
+/**
+ * Interface for speech recognition result lists
+ */
 interface SpeechRecognitionResultList {
   [index: number]: { [index: number]: { transcript: string } };
 }
 
+/**
+ * Interface for speech recognition events
+ */
 interface SpeechRecognitionEvent {
   results: SpeechRecognitionResultList;
 }
 
+/**
+ * Interface for speech recognition error events
+ */
 interface SpeechRecognitionErrorEvent {
   error: string;
 }
 
+/**
+ * Interface for SpeechRecognition API instance
+ * Defines the methods and properties we use from the Web Speech API
+ */
+interface SpeechRecognitionInstance {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+
+/**
+ * Component that provides voice interaction capabilities
+ * Uses Web Speech API for recognition and ElevenLabs for response
+ */
 export default function VoiceInteraction({
   onConversationUpdate,
   onError,
   agentId: propAgentId,
 }: VoiceInteractionProps) {
+  // --- State Management ---
+  // Recognition and processing states
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Translation states
   const [, setTranslation] = useState("");
   const [showTranslation, setShowTranslation] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Error and agent states
   const [errorMessage, setErrorMessage] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
   const [localAgentId, setLocalAgentId] = useState<string | null>(null);
+
+  // Conversation history
   const [messageHistory, setMessageHistory] = useState<MessageEntry[]>([]);
-  // Define a simple interface that matches what we need from SpeechRecognition
-  interface SpeechRecognitionInstance {
-    lang: string;
-    continuous: boolean;
-    interimResults: boolean;
-    start(): void;
-    stop(): void;
-    onresult: ((event: SpeechRecognitionEvent) => void) | null;
-    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-    onend: (() => void) | null;
-  }
+
+  // --- References ---
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Handle ElevenLabs response
+  /**
+   * Handle ElevenLabs text-to-speech response
+   * Sends user input to ElevenLabs API and plays the response
+   *
+   * @param {string} userInput - User's speech transcript
+   */
   const handleElevenLabsResponse = useCallback(
     async (userInput: string) => {
       try {
@@ -86,7 +128,10 @@ export default function VoiceInteraction({
     [propAgentId, localAgentId]
   );
 
-  // Initialize speech recognition with a retry mechanism
+  /**
+   * Initialize speech recognition with the Web Speech API
+   * @returns {boolean} Whether initialization was successful
+   */
   const initSpeechRecognition = useCallback(() => {
     const ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!ctor) throw new Error("no speech API");
@@ -100,7 +145,24 @@ export default function VoiceInteraction({
     return true;
   }, []);
 
-  // Setup event handlers for speech recognition
+  /**
+   * Stop the speech recognition process
+   */
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        (recognitionRef.current as SpeechRecognitionInstance).stop();
+      } catch (err) {
+        console.error("Error stopping recognition:", err);
+      }
+    }
+    setIsListening(false);
+  }, []);
+
+  /**
+   * Set up event handlers for speech recognition
+   * Handles results, errors, and recognition end events
+   */
   const setupRecognitionEventHandlers = useCallback(() => {
     const recognition = recognitionRef.current as SpeechRecognitionInstance;
     if (!recognition) return;
@@ -158,9 +220,10 @@ export default function VoiceInteraction({
     onConversationUpdate,
     handleElevenLabsResponse,
     initSpeechRecognition,
+    stopListening,
   ]);
 
-  // Set up error message handling
+  // Pass error messages to parent component
   useEffect(() => {
     if (errorMessage && onError) {
       onError(errorMessage);
@@ -261,7 +324,7 @@ export default function VoiceInteraction({
   }, [transcript]);
 
   const handleMicrophoneClick = () => {
-    // Clear previous error message
+    // Clear the previous error message
     setErrorMessage("");
 
     if (!isListening) {
@@ -278,7 +341,7 @@ export default function VoiceInteraction({
     setShowTranslation(false);
     setRetryCount(0);
 
-    // Check if browser supports speech recognition
+    // Check if the browser supports speech recognition
     if (!recognitionRef.current) {
       // Try to re-initialize
       if (!initSpeechRecognition()) {
@@ -331,17 +394,6 @@ export default function VoiceInteraction({
         "Failed to start speech recognition. Please try again or reload the page."
       );
     }
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        (recognitionRef.current as SpeechRecognitionInstance).stop();
-      } catch (err) {
-        console.error("Error stopping recognition:", err);
-      }
-    }
-    setIsListening(false);
   };
 
   // Add a retry button

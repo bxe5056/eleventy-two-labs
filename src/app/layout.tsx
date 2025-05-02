@@ -2,23 +2,66 @@
 
 import { Inter } from "next/font/google";
 import Link from "next/link";
+import React, { useEffect } from "react";
+import { ElevenLabsProvider, useElevenLabs } from "./context/ElevenLabsContext";
+import { setMockMode } from "./utils/elevenlabs";
 import "./globals.css";
 
+// Configure Next.js Inter font with a Latin subset
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
 });
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+/**
+ * Toggle component for switching between live API and demo mode
+ * Uses the ElevenLabs context to manage state
+ */
+function MockModeToggle() {
+  const { useMockApi, toggleMockApi } = useElevenLabs();
+
+  // Update the elevenlabs utility when the context changes
+  useEffect(() => {
+    setMockMode(useMockApi);
+  }, [useMockApi]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-slate-300">
+        {useMockApi ? "Demo Mode" : "Live API"}
+      </span>
+      <button
+        onClick={toggleMockApi}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 ${
+          useMockApi ? "bg-amber-600" : "bg-slate-600"
+        }`}
+        role="switch"
+        aria-checked={useMockApi}
+      >
+        <span className="sr-only">
+          {useMockApi ? "Disable Demo Mode" : "Enable Demo Mode"}
+        </span>
+        <span
+          className={`${
+            useMockApi ? "translate-x-6" : "translate-x-1"
+          } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+        />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Main application layout component
+ * Contains the header, main content area, and footer
+ */
+function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
       <body className={`${inter.className} antialiased`}>
         <div className="min-h-screen flex flex-col">
+          {/* Header */}
           <header className="sticky top-0 z-10 bg-slate-800/90 backdrop-blur-md shadow-sm border-b border-slate-700 py-4">
             <div className="container mx-auto px-4 flex justify-between items-center">
               <Link
@@ -27,6 +70,8 @@ export default function RootLayout({
               >
                 SpanishVoice
               </Link>
+
+              {/* Desktop Navigation */}
               <nav className="hidden md:flex items-center space-x-8">
                 <Link
                   href="/"
@@ -40,10 +85,13 @@ export default function RootLayout({
                 >
                   Lessons
                 </Link>
+                <MockModeToggle />
                 <Link href="/#top" className="btn btn-primary rounded-full">
                   Start Speaking
                 </Link>
               </nav>
+
+              {/* Mobile Menu Button */}
               <button className="md:hidden text-slate-200 hover:bg-slate-700/50 p-2 rounded-lg transition-colors">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -62,7 +110,11 @@ export default function RootLayout({
               </button>
             </div>
           </header>
+
+          {/* Main Content Area */}
           <main className="flex-grow">{children}</main>
+
+          {/* Footer */}
           <footer className="bg-slate-50 border-t border-slate-200 py-12 mt-12">
             <div className="container mx-auto px-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -131,5 +183,21 @@ export default function RootLayout({
         </div>
       </body>
     </html>
+  );
+}
+
+/**
+ * Root layout component that wraps the application with the ElevenLabs provider
+ * This is the main entry point for the application
+ */
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <ElevenLabsProvider>
+      <AppLayout>{children}</AppLayout>
+    </ElevenLabsProvider>
   );
 }

@@ -76,8 +76,41 @@ This application requires an ElevenLabs Conversational AI agent. You'll need to:
 
 1. Create an account at [elevenlabs.io](https://elevenlabs.io)
 2. Create a conversational agent for Spanish tutoring
+
+   1. Set the Agent Language to English
+   1. Add Spanish as an Additional Language
+   1. Leave first message blank
+   1. Use this prompt for the System Prompt
+
+      1. You are a Spanish language tutor engaged in a verbal conversation with the user. Your goal is to help the user practice and improve their spoken Spanish through natural, supportive conversation.
+
+      Speak entirely in Spanish, unless the user directly asks for clarification or an explanation about a word, phrase, grammar rule, or instruction or you need to correct the user's Spanish grammar—in which case, you may respond in English briefly, then return to Spanish.
+
+      Adjust your language level to the user’s responses: use simpler vocabulary and grammar if the user struggles, and increase complexity and overall message length as they improve.
+
+      Encourage the user to repeat and practice key vocabulary and phrases relevant to the current topic.
+
+      Gently correct any Spanish mistakes the user makes. Briefly explain the correction in English, and then ask the user to try again or repeat it. Then return to Spanish.
+
+      Occasionally suggest short, practical roleplays (e.g., ordering at a restaurant, asking for directions) to give context to new vocabulary.
+
+      Incorporate past vocabulary periodically to reinforce learning.
+
+      Keep the tone warm, encouraging, and focused on helping the user gain confidence speaking Spanish.
+
+   1. To potentially save on resource costs, set the LLM to GPT-4.1 Nano
+   1. Set Temperature to 0.65
+   1. NOTE: For testing purposes, I have limit token usage set to 20 tokens.
+   1. Set Voice to Jamahal (or a different one if you prefer)
+   1. Set Speed to 0.9 (or 0.8)
+   1. Set Similarity to 0.8
+   1. Set Silence end call timeout to 20 (or 30)
+   1. Set max conversation duration to 300
+   1. Add the following events to the Client Events list
+      1. audio, interruption, user_transcript, agent_response, agent_response_correction
+
 3. Copy the agent ID
-4. Add the agent ID to your environment variables
+4. Add the agent ID to your environment variables as listed below
 
 ### Amazon Translate Setup
 
@@ -97,9 +130,11 @@ Create a `.env.local` file in the root directory with:
 
 ```
 NEXT_PUBLIC_AGENT_ID=your_elevenlabs_agent_id
+NEXT_PUBLIC_VOICE_ID=your_public_voice_id
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_REGION=your_preferred_region
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
 ```
 
 ## Getting Started
@@ -130,3 +165,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 4. Click the button again to end the session
 
 The application will automatically show translations for Spanish text after a 15-second delay to encourage you to try understanding the content first.
+
+---
+
+TODO: Clear out console.logs()
+TODO: Implement Lessons
+TODO: Use less ElevenLabs Credits
+TODO: Determine auto-user drop off bug in demo-mode
+TODO: Add feature to input your own ElevenLabs Agent ID
+

@@ -68,13 +68,6 @@ export default function ConversationInterface() {
 
   return (
     <div className="flex flex-col md:flex-row gap-8 w-full max-w-6xl mx-auto">
-      {/* Agent ID Indicator (only visible in development) */}
-      {agentId && process.env.NODE_ENV === "development" && (
-        <div className="fixed top-20 right-2 z-50 bg-slate-800 text-white text-xs px-3 py-1 rounded-full shadow-md">
-          Lesson Agent ID: {agentId.slice(0, 8)}...
-        </div>
-      )}
-
       <div className="flex-1 bg-white dark:bg-slate-800 rounded-xl shadow-md p-4 md:max-h-[600px] overflow-y-auto border border-slate-200 dark:border-slate-700">
         <div className="conversation-history space-y-4">
           {messages.map((message, index) => (

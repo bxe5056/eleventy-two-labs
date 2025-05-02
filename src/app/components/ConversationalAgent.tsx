@@ -1,19 +1,40 @@
 "use client";
 
 import { useConversation } from "@11labs/react";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef, JSX } from "react";
+import { useElevenLabs } from "../context/ElevenLabsContext";
+import { generateMockResponse } from "../utils/elevenlabs";
 
+/**
+ * Props for ConversationalAgent component
+ * @property {function} [onConversationUpdate] - Optional callback for conversation updates
+ */
 interface ConversationalAgentProps {
   onConversationUpdate?: (message: string, isUser: boolean) => void;
 }
 
-// Define types for ElevenLabs messages
+/**
+ * Interface for messages received from ElevenLabs API
+ * @property {string} message - The message content
+ * @property {"user" | "ai"} source - Who sent the message
+ */
 interface ElevenLabsMessage {
   message: string;
   source: "user" | "ai";
 }
 
-// Message history interface
+/**
+ * Interface for message entries in conversation history
+ * @property {string} text - The message text content
+ * @property {boolean} isUser - Whether the message is from user (true) or AI (false)
+ * @property {string} [translation] - Optional translation of the message
+ * @property {boolean} [isSystemMessage] - Whether it's a system message (not from user or AI)
+ * @property {"english" | "spanish" | "mixed"} [language] - Detected language of the message
+ * @property {boolean} [showTranslation] - Whether to display translation
+ * @property {number} [translationCountdown] - Countdown before showing translation
+ * @property {boolean} [translationInProgress] - Whether translation is in progress
+ * @property {boolean} [messageComplete] - Whether the message is complete (important for AI responses)
+ */
 interface MessageEntry {
   text: string;
   isUser: boolean;
@@ -26,25 +47,40 @@ interface MessageEntry {
   messageComplete?: boolean;
 }
 
-// Translation countdown component for better rendering performance
+/**
+ * Props for TranslationCountdown component
+ * @property {number} initialSeconds - Initial countdown time in seconds
+ * @property {function} onComplete - Callback when countdown completes
+ * @property {function} getText - Function to get display text for current countdown
+ */
+interface TranslationCountdownProps {
+  initialSeconds: number;
+  onComplete: () => void;
+  getText: (seconds: number) => string;
+}
+
+/**
+ * Component that displays a countdown timer for translations
+ * Shows a visual progress bar and countdown message
+ */
 function TranslationCountdown({
   initialSeconds,
   onComplete,
   getText,
-}: {
-  initialSeconds: number;
-  onComplete: () => void;
-  getText: (seconds: number) => string;
-}) {
+}: TranslationCountdownProps) {
+  // Track remaining seconds in countdown
   const [seconds, setSeconds] = useState(initialSeconds);
+
+  // Calculate progress percentage for visual indicator
   const progressPercent = ((initialSeconds - seconds) / initialSeconds) * 100;
 
+  // Set up the countdown timer effect
   useEffect(() => {
     const timer = setInterval(() => {
       setSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setTimeout(onComplete, 100); // Give it a slight delay before completion
+          setTimeout(onComplete, 100); // Small delay before completion
           return 0;
         }
         return prev - 1;
@@ -57,6 +93,7 @@ function TranslationCountdown({
       "seconds"
     );
 
+    // Clean up timer on unmount
     return () => {
       console.log("Countdown component unmounted, clearing timer");
       clearInterval(timer);
@@ -98,112 +135,223 @@ function TranslationCountdown({
   );
 }
 
+/**
+ * Main conversational agent component that provides speech interaction
+ * Handles both real API and mock mode for demonstration purposes
+ *
+ * @param {ConversationalAgentProps} props - Component props
+ * @returns {JSX.Element} Rendered component
+ */
 export default function ConversationalAgent({
   onConversationUpdate,
-}: ConversationalAgentProps) {
+}: ConversationalAgentProps): JSX.Element {
+  // --- State Management ---
+  // Error and connection states
   const [errorMessage, setErrorMessage] = useState("");
   const [agentId, setAgentId] = useState("");
-  const [transcript, setTranscript] = useState("");
-  const [isPrivateAgent, setIsPrivateAgent] = useState(false);
-  const [isGettingSignedUrl, setIsGettingSignedUrl] = useState(false);
+  const [isGettingSignedUrl] = useState(false);
+
+  // Conversation state
+  const [, setTranscript] = useState("");
   const [messageHistory, setMessageHistory] = useState<MessageEntry[]>([]);
   const [agentResponse, setAgentResponse] = useState("");
 
-  // Initialize the conversation with ElevenLabs
-  const conversation = useConversation({
+  // Mock mode states
+  const [mockConversationStatus, setMockConversationStatus] = useState<
+    "disconnected" | "connecting" | "connected"
+  >("disconnected");
+  const [mockIsSpeaking, setMockIsSpeaking] = useState(false);
+
+  // --- References and Context ---
+  const { useMockApi } = useElevenLabs();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Track when we last triggered a simulation
+  const lastSimulationTime = useRef<number>(0);
+
+  /**
+   * Initialize ElevenLabs conversation with handlers
+   * This is always initialized but only used when not in mock mode
+   */
+  const elevenlabsConversation = useConversation({
     onConnect: () => {
       console.log("Connected to ElevenLabs");
-
-      // Add a welcome message to start the conversation and ensure transcript is visible
-      // This helps in cases where the SDK doesn't immediately send a message
-      //   setTimeout(() => {
-      //     if (messageHistory.length === 0) {
-      //       console.log("onConnect: Adding initial welcome message");
-      //     //   const welcomeMessage =
-      //     //     "";
-
-      //     //   // Add the welcome message to the history
-      //     //   setMessageHistory([{ text: welcomeMessage, isUser: false }]);
-      //     //   setAgentResponse(welcomeMessage);
-
-      //     //   if (onConversationUpdate) {
-      //     //     onConversationUpdate(welcomeMessage, false);
-      //     //   }
-      //     }
-      //   }, 1000);
     },
     onDisconnect: () => console.log("Disconnected from ElevenLabs"),
     onMessage: (message: ElevenLabsMessage) => {
-      console.log("Message received from ElevenLabs:", message);
+      if (!useMockApi) {
+        // Only process messages when not in mock mode
+        console.log("Message received from ElevenLabs:", message);
 
-      if (message.message && message.source) {
-        const isUser = message.source === "user";
-        const messageText = message.message;
+        if (message.message && message.source) {
+          const isUser = message.source === "user";
+          const messageText = message.message;
 
-        console.log(`${isUser ? "User" : "AI"} message:`, messageText);
+          console.log(`${isUser ? "User" : "AI"} message:`, messageText);
 
-        // Detect language
-        const language = detectLanguage(messageText);
+          // Detect language
+          const language = detectLanguage(messageText);
 
-        if (isUser) {
-          setTranscript(messageText);
-        } else {
-          setAgentResponse(messageText);
-        }
-
-        // Add message to history
-        setMessageHistory((prev) => {
-          // Check if this exact message is already the last message from this source
-          const lastMessage = prev.length > 0 ? prev[prev.length - 1] : null;
-          if (
-            lastMessage &&
-            lastMessage.isUser === isUser &&
-            lastMessage.text === messageText
-          ) {
-            return prev; // Skip duplicate messages
+          if (isUser) {
+            setTranscript(messageText);
+          } else {
+            setAgentResponse(messageText);
           }
 
-          // Create new message object with language detection
-          const newMessage: MessageEntry = {
-            text: messageText,
-            isUser,
-            language,
-            showTranslation: false,
-            translationInProgress: false,
-            messageComplete: isUser, // User messages are complete immediately
-          };
+          // Add the message to history
+          setMessageHistory((prev) => {
+            // Check if this exact message is already the last message from this source
+            const lastMessage = prev.length > 0 ? prev[prev.length - 1] : null;
+            if (
+              lastMessage &&
+              lastMessage.isUser === isUser &&
+              lastMessage.text === messageText
+            ) {
+              return prev; // Skip duplicate messages
+            }
 
-          return [...prev, newMessage];
-        });
+            // Create new message object with language detection
+            const newMessage: MessageEntry = {
+              text: messageText,
+              isUser,
+              language,
+              showTranslation: false,
+              translationInProgress: false,
+              messageComplete: isUser, // User messages are complete immediately
+            };
 
-        if (onConversationUpdate) {
-          onConversationUpdate(messageText, isUser);
+            return [...prev, newMessage];
+          });
+
+          if (onConversationUpdate) {
+            onConversationUpdate(messageText, isUser);
+          }
         }
       }
     },
     onError: (message: string) => {
-      console.error("ElevenLabs error:", message);
-      setErrorMessage(`Error: ${message || "Connection failed"}`);
+      if (!useMockApi) {
+        // Only process errors when not in mock mode
+        console.error("ElevenLabs error:", message);
+        setErrorMessage(`Error: ${message || "Connection failed"}`);
+      }
     },
   });
 
-  // Check for API key on component mount
-  useEffect(() => {
-    // Only use environment variable
-    const envAgentId = process.env.NEXT_PUBLIC_AGENT_ID;
-    if (envAgentId) {
-      setAgentId(envAgentId);
+  /**
+   * Speaks text using browser's built-in speech synthesis for AI responses
+   * Used for demo mode when ElevenLabs API is not available
+   *
+   * @param {string} text - Text to be spoken
+   */
+  const speakWithSynthesis = useCallback((text: string) => {
+    // Check if speech synthesis is available
+    if (!window.speechSynthesis) {
+      console.warn("Speech synthesis not supported in this browser");
+      return;
     }
 
-    // Check for private agent setting
-    const storedIsPrivate = localStorage.getItem("elevenlabs_is_private_agent");
-    if (storedIsPrivate === "true") {
-      setIsPrivateAgent(true);
+    // Create a new utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Configure voice settings for Spanish
+    utterance.lang = "es-ES";
+    utterance.rate = 0.9; // Slightly slower than default
+    utterance.pitch = 1;
+
+    // Get Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(
+      (voice) => voice.lang.includes("es") && !voice.name.includes("Google")
+    );
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
     }
+
+    // Set event handlers
+    utterance.onstart = () => {
+      console.log("AI speech synthesis started");
+      setMockIsSpeaking(true);
+    };
+
+    utterance.onend = () => {
+      console.log("AI speech synthesis ended");
+      setMockIsSpeaking(false);
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+      setMockIsSpeaking(false);
+    };
+
+    // Speak the text
+    window.speechSynthesis.speak(utterance);
   }, []);
 
-  // Simple mock translation functions
-  const mockTranslate = (text: string): string => {
+  /**
+   * Speaks text using browser's built-in speech synthesis for user responses
+   * Used for demo mode to give a different voice to the user
+   *
+   * @param {string} text - Text to be spoken
+   */
+  const speakUserWithSynthesis = useCallback((text: string) => {
+    // Check if speech synthesis is available
+    if (!window.speechSynthesis) {
+      console.warn("Speech synthesis not supported in this browser");
+      return;
+    }
+
+    // Create a new utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Configure voice settings for Spanish - different from AI voice
+    utterance.lang = "es-ES";
+    utterance.rate = 1.0; // Normal rate
+    utterance.pitch = 1.2; // Higher pitch for differentiation
+
+    // Get a different Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    // Try to get a different voice than the AI - prefer a female voice if available
+    const userSpanishVoice = voices.find(
+      (voice) => voice.lang.includes("es") && voice.name.includes("Google")
+    );
+
+    if (userSpanishVoice) {
+      utterance.voice = userSpanishVoice;
+    } else {
+      // If no specific voice is found, adjust parameters more to differentiate
+      utterance.pitch = 1.3;
+      utterance.rate = 1.1;
+    }
+
+    // Set event handlers - we don't change mock speaking state for user voice
+    utterance.onstart = () => {
+      console.log("User speech synthesis started");
+    };
+
+    utterance.onend = () => {
+      console.log("User speech synthesis ended");
+    };
+
+    utterance.onerror = (event) => {
+      console.error("User speech synthesis error:", event);
+    };
+
+    // Speak the text
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  // --- API and Utility Functions ---
+
+  /**
+   * Simple mock translation function for demo mode
+   * Translates Spanish to English using a basic dictionary
+   *
+   * @param {string} text - Text to translate
+   * @returns {string} Translated text
+   */
+  const mockTranslate = useCallback((text: string): string => {
     // Very basic Spanish to English translations for demo purposes
     const translations: Record<string, string> = {
       hola: "hello",
@@ -233,10 +381,10 @@ export default function ConversationalAgent({
     });
 
     return translated.charAt(0).toUpperCase() + translated.slice(1);
-  };
+  }, []);
 
   // Simple mock translation from English to Spanish
-  const mockTranslateToEnglish = (text: string): string => {
+  const mockTranslateToEnglish = useCallback((text: string): string => {
     // Basic Spanish to English translations for AI responses
     const translations: Record<string, string> = {
       "¡hola!": "Hello!",
@@ -255,6 +403,8 @@ export default function ConversationalAgent({
       "repite después de mí": "Repeat after me",
       "muy bien": "Very good",
       excelente: "Excellent",
+      "¡Hola! Bienvenido a la práctica de español. ¿Cómo estás hoy?":
+        "Hello! Welcome to Spanish practice. How are you today?",
       // Add more common phrases as needed
     };
 
@@ -265,52 +415,122 @@ export default function ConversationalAgent({
     });
 
     return translated;
-  };
+  }, []);
 
-  // Add a useEffect to handle translation timer for user messages
-  useEffect(() => {
-    // Nothing to do here - we now handle user message translations
-    // in the same way as AI messages via the countdown system
-  }, [transcript]);
+  // Utility functions to handle both mock and real modes
+  const getStatus = useCallback(() => {
+    return useMockApi
+      ? mockConversationStatus
+      : elevenlabsConversation?.status || "disconnected";
+  }, [useMockApi, mockConversationStatus, elevenlabsConversation?.status]);
 
-  // Get a signed URL for private agents
-  const getSignedUrl = useCallback(async (): Promise<string> => {
-    setIsGettingSignedUrl(true);
-    try {
-      const response = await fetch(`/api/get-signed-url?agent_id=${agentId}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          `Failed to get signed URL: ${errorData.error || response.statusText}`
-        );
+  const getIsSpeaking = useCallback(() => {
+    return useMockApi
+      ? mockIsSpeaking
+      : elevenlabsConversation?.isSpeaking || false;
+  }, [useMockApi, mockIsSpeaking, elevenlabsConversation?.isSpeaking]);
+
+  const startConversationSession = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async (options?: any) => {
+      if (useMockApi) {
+        setMockConversationStatus("connecting");
+        // Simulate connection delay
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setMockConversationStatus("connected");
+        return true;
+      } else if (elevenlabsConversation) {
+        return await elevenlabsConversation.startSession(options);
       }
-      const data = await response.json();
-      setIsGettingSignedUrl(false);
-      return data.signedUrl;
-    } catch (error) {
-      setIsGettingSignedUrl(false);
-      console.error("Error fetching signed URL:", error);
-      setErrorMessage(
-        `Failed to get signed URL: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-      throw error;
-    }
-  }, [agentId]);
+      return false;
+    },
+    [useMockApi, elevenlabsConversation]
+  );
 
+  const endConversationSession = useCallback(async () => {
+    if (useMockApi) {
+      setMockConversationStatus("disconnected");
+      return true;
+    } else if (elevenlabsConversation) {
+      return await elevenlabsConversation.endSession();
+    }
+    return false;
+  }, [useMockApi, elevenlabsConversation]);
+
+  // startConversation handler
   const startConversation = useCallback(async () => {
     setErrorMessage("");
     console.log("Starting conversation with agent ID:", agentId);
 
-    try {
-      // Request microphone permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (useMockApi) {
+      console.log("Using mock mode for ElevenLabs conversation");
 
+      // For mock mode, we can simulate starting a conversation instantly
+      // Add a session start delimiter if there are previous messages
+      if (messageHistory.length > 0) {
+        const sessionStartTime = new Date().toLocaleTimeString();
+        setMessageHistory((prev) => [
+          ...prev,
+          {
+            text: `New session started at ${sessionStartTime}`,
+            isUser: false,
+            isSystemMessage: true,
+          },
+        ]);
+      }
+
+      // Start the mock session
+      await startConversationSession();
+
+      // Add a welcome message after "connecting"
+      const welcomeMessage = generateMockResponse("");
+      console.log("Adding mock welcome message:", welcomeMessage);
+
+      setMessageHistory((prev) => [
+        ...prev,
+        {
+          text: welcomeMessage,
+          isUser: false,
+          language: detectLanguage(welcomeMessage),
+          showTranslation: false,
+          translationInProgress: false,
+          messageComplete: true,
+        },
+      ]);
+
+      setAgentResponse(welcomeMessage);
+
+      if (onConversationUpdate) {
+        onConversationUpdate(welcomeMessage, false);
+      }
+
+      // Speak the welcome message using browser's speech synthesis
+      speakWithSynthesis(welcomeMessage);
+
+      return;
+    }
+
+    // Real API mode code
+    try {
+      // First check if we have the necessary API credentials
       if (!agentId) {
         setErrorMessage(
-          "Agent ID is not available. Please add NEXT_PUBLIC_AGENT_ID to your environment variables."
+          "ElevenLabs API credentials are not configured. Please add your NEXT_PUBLIC_AGENT_ID to your environment variables or stay in demo mode."
         );
+        console.error(
+          "Missing ElevenLabs agent ID. Cannot connect to live API."
+        );
+        return;
+      }
+
+      // Request microphone permission
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (micError) {
+        setErrorMessage(
+          "Microphone access denied. Please allow microphone access to use the voice conversation feature."
+        );
+        console.error("Microphone access error:", micError);
         return;
       }
 
@@ -327,23 +547,30 @@ export default function ConversationalAgent({
         ]);
       }
 
-      // For private agents, get a signed URL
-      if (isPrivateAgent) {
-        try {
-          const signedUrl = await getSignedUrl();
-          console.log("Starting session with signed URL");
-          await conversation.startSession({
-            signedUrl,
-          });
-        } catch {
-          return; // The error is already handled in getSignedUrl
-        }
+      // Attempt to start the session
+      console.log(
+        "Attempting to start ElevenLabs session with agent ID:",
+        agentId
+      );
+
+      // Start the session with ElevenLabs - use direct agent ID, no signed URL needed
+      const success = await startConversationSession({ agentId });
+      if (!success) {
+        setErrorMessage(
+          "Failed to establish connection with ElevenLabs. Please check your API credentials or try again later."
+        );
+        console.error("Failed to start ElevenLabs session");
       } else {
-        // For public agents, use the agent ID directly
-        console.log("Starting session with agent ID");
-        await conversation.startSession({
-          agentId,
-        });
+        console.log("ElevenLabs session started successfully");
+        // Add a welcome message to inform the user that the connection is ready
+        setMessageHistory((prev) => [
+          ...prev,
+          {
+            text: "Connected to ElevenLabs. You can start speaking now.",
+            isUser: false,
+            isSystemMessage: true,
+          },
+        ]);
       }
     } catch (error) {
       console.error("Failed to start conversation:", error);
@@ -353,11 +580,58 @@ export default function ConversationalAgent({
         }`
       );
     }
-  }, [agentId, messageHistory.length, isPrivateAgent, conversation, getSignedUrl]);
+  }, [
+    agentId,
+    messageHistory.length,
+    useMockApi,
+    startConversationSession,
+    onConversationUpdate,
+    speakWithSynthesis,
+  ]);
 
+  // stopConversation handler
   const stopConversation = useCallback(async () => {
     try {
-      await conversation.endSession();
+      // If in mock mode, simulate ending the session
+      if (useMockApi) {
+        console.log("Ending mock conversation");
+
+        // Add a goodbye message
+        const goodbyeMessage =
+          "¡Hasta luego! Gracias por practicar español conmigo hoy.";
+        setMessageHistory((prev) => [
+          ...prev,
+          {
+            text: goodbyeMessage,
+            isUser: false,
+            language: detectLanguage(goodbyeMessage),
+            showTranslation: false,
+            translationInProgress: false,
+            messageComplete: true,
+          },
+        ]);
+
+        // After a short delay, end the session
+        setTimeout(async () => {
+          await endConversationSession();
+
+          // Add a session delimiter to the transcript
+          const sessionEndTime = new Date().toLocaleTimeString();
+          setMessageHistory((prev) => [
+            ...prev,
+            {
+              text: `Session ended at ${sessionEndTime}`,
+              isUser: false,
+              isSystemMessage: true,
+            },
+          ]);
+        }, 1000);
+
+        return;
+      }
+
+      // For real mode, use the actual API
+      await endConversationSession();
 
       // Add a session delimiter to the transcript
       const sessionEndTime = new Date().toLocaleTimeString();
@@ -372,13 +646,231 @@ export default function ConversationalAgent({
     } catch (error) {
       console.error("Failed to end conversation:", error);
     }
-  }, [conversation]);
+  }, [useMockApi, endConversationSession]);
 
-  // Calculate layout classes based on whether transcript is showing
+  const simulateUserInput = useCallback(() => {
+    if (!useMockApi || getStatus() !== "connected" || getIsSpeaking()) {
+      return;
+    }
+
+    // Get a random sample input
+    const randomIndex = Math.floor(Math.random() * sampleUserInputs.length);
+    const mockUserInput = sampleUserInputs[randomIndex];
+
+    console.log("Simulating user input:", mockUserInput);
+
+    // Add the user message to history
+    setMessageHistory((prev) => [
+      ...prev,
+      {
+        text: mockUserInput,
+        isUser: true,
+        language: detectLanguage(mockUserInput),
+        showTranslation: false,
+        translationInProgress: false,
+        messageComplete: true,
+      },
+    ]);
+
+    // Play the user message with speech synthesis
+    speakUserWithSynthesis(mockUserInput);
+
+    // Process the mock response after a delay
+    setTimeout(() => {
+      const mockResponse = generateMockResponse(mockUserInput);
+      console.log("Generated mock response:", mockResponse);
+
+      // Add the mock response to history
+      setMessageHistory((prev) => [
+        ...prev,
+        {
+          text: mockResponse,
+          isUser: false,
+          language: detectLanguage(mockResponse),
+          showTranslation: false,
+          translationInProgress: false,
+          messageComplete: true,
+        },
+      ]);
+
+      setAgentResponse(mockResponse);
+
+      if (onConversationUpdate) {
+        onConversationUpdate(mockResponse, false);
+      }
+
+      // Speak the response using browser's speech synthesis
+      speakWithSynthesis(mockResponse);
+    }, 1500 + Math.random() * 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    useMockApi,
+    getStatus,
+    getIsSpeaking,
+    onConversationUpdate,
+    speakWithSynthesis,
+    speakUserWithSynthesis,
+  ]);
+
+  // useEffect hooks
+  // Check for an API key and update UI when mode changes
+  useEffect(() => {
+    // If switched to live mode, check for API key
+    if (!useMockApi) {
+      const envAgentId = process.env.NEXT_PUBLIC_AGENT_ID;
+      if (envAgentId) {
+        setAgentId(envAgentId);
+        console.log("Using API agent ID from environment variables");
+      } else {
+        console.warn("No ElevenLabs agent ID found in environment variables");
+        setErrorMessage(
+          "ElevenLabs API credentials are not configured. Please add your NEXT_PUBLIC_AGENT_ID to your environment variables or switch back to demo mode."
+        );
+      }
+    } else {
+      // Clear any API-related error messages when in demo mode
+      if (errorMessage && errorMessage.includes("API credentials")) {
+        setErrorMessage("");
+      }
+    }
+  }, [useMockApi, errorMessage]);
+
+  // Original useEffect to check for API key on mount
+  useEffect(() => {
+    // Only use environment variable
+    const envAgentId = process.env.NEXT_PUBLIC_AGENT_ID;
+    if (envAgentId) {
+      setAgentId(envAgentId);
+    }
+  }, []);
+
+  // Function to check if it's appropriate to simulate a user response
+
+  // Function to trigger user simulation if conditions are right
+
+  // Handle isSpeaking changes to detect when messages are complete
+  // This effect marks AI messages as complete when speaking ends
+  useEffect(() => {
+    // Only run this when speaking state changes from true to false
+    if (getIsSpeaking() === false) {
+      // Use functional update to avoid circular dependencies
+      setMessageHistory((prev) => {
+        // Don't update if there's no change needed
+        let needsUpdate = false;
+        const newHistory = prev.map((msg) => {
+          if (!msg.isUser && !msg.isSystemMessage && !msg.messageComplete) {
+            needsUpdate = true;
+            return { ...msg, messageComplete: true };
+          }
+          return msg;
+        });
+
+        // Only return new array if we actually made changes
+        return needsUpdate ? newHistory : prev;
+      });
+    }
+  }, [getIsSpeaking]); // Only depend on the speaking state
+
+  // This effect triggers simulation after AI message completes
+  // Separate from the above effect to avoid circular dependencies
+  useEffect(() => {
+    // Find the last message
+    if (
+      messageHistory.length === 0 ||
+      !useMockApi ||
+      getStatus() !== "connected"
+    ) {
+      return;
+    }
+
+    const lastMsg = messageHistory[messageHistory.length - 1];
+
+    // If the last message is from the AI, complete, and we're not speaking
+    if (
+      !lastMsg.isUser &&
+      !lastMsg.isSystemMessage &&
+      lastMsg.messageComplete &&
+      !getIsSpeaking()
+    ) {
+      // Add a delay before triggering simulation
+      const timer = setTimeout(() => {
+        if (!getIsSpeaking() && useMockApi && getStatus() === "connected") {
+          const now = Date.now();
+          // Prevent rapid re-triggering
+          if (now - lastSimulationTime.current >= 2000) {
+            console.log("Delayed simulation trigger after message completion");
+            lastSimulationTime.current = now;
+            simulateUserInput();
+          }
+        }
+      }, 3000 + Math.random() * 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [messageHistory, useMockApi, getStatus, getIsSpeaking, simulateUserInput]);
+
+  // Handle mock speaking state in useEffect
+  useEffect(() => {
+    if (useMockApi && mockConversationStatus === "connected") {
+      // If a new AI message is added, set speaking to true temporarily
+      const lastMessage = messageHistory[messageHistory.length - 1];
+      if (lastMessage && !lastMessage.isUser && !lastMessage.isSystemMessage) {
+        // Set speaking to true
+        setMockIsSpeaking(true);
+
+        // Calculate speaking duration based on message length
+        const speakingDuration =
+          Math.max(2, Math.min(7, lastMessage.text.length / 15)) * 1000;
+
+        console.log(
+          `Setting speaking state for ${speakingDuration}ms based on message length`
+        );
+
+        // After duration, set speaking to false
+        const timer = setTimeout(() => {
+          setMockIsSpeaking(false);
+          console.log("Speaking completed");
+        }, speakingDuration);
+
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [useMockApi, mockConversationStatus, messageHistory]);
+
+  // Additional fallback timer to check for missed simulations
+  useEffect(() => {
+    if (!useMockApi || getStatus() !== "connected") {
+      return;
+    }
+
+    // Create a periodic check every 10 seconds to make sure we didn't miss a simulation
+    const fallbackTimer = setInterval(() => {
+      const timeSinceLastSimulation = Date.now() - lastSimulationTime.current;
+
+      // If it's been more than 20 seconds since our last simulation, check if we should trigger one
+      if (timeSinceLastSimulation > 20000) {
+        console.log(
+          "Fallback check: It's been more than 20 seconds since last simulation"
+        );
+
+        // Only trigger if the last message is from the AI and not a system message
+        if (messageHistory.length > 0) {
+          const lastMsg = messageHistory[messageHistory.length - 1];
+          if (!lastMsg.isUser && !lastMsg.isSystemMessage && !getIsSpeaking()) {
+            console.log("Fallback mechanism: Triggering missed simulation");
+            lastSimulationTime.current = Date.now();
+            simulateUserInput();
+          }
+        }
+      }
+    }, 10000);
+
+    return () => clearInterval(fallbackTimer);
+  }, [useMockApi, getStatus, messageHistory, getIsSpeaking, simulateUserInput]);
+
+  // Calculate layout classes based on whether the transcript is showing
   const hasTranscript =
-    messageHistory.length > 0 ||
-    errorMessage ||
-    conversation.status === "connected";
+    messageHistory.length > 0 || errorMessage || getStatus() === "connected";
   const containerClasses = `voice-interaction flex ${
     hasTranscript ? "flex-col md:flex-row items-start" : "flex-col items-center"
   } gap-8 w-full max-w-6xl mx-auto`;
@@ -434,10 +926,10 @@ export default function ConversationalAgent({
       return "english";
     }
 
-    // If it has both languages more or less equally, call it mixed
+    // If it has both languages more or less equally, call it mixed but return as Spanish
     if (spanishMatches > 0 && englishMatches > 0) {
       console.log("Detected as: mixed");
-      return "mixed";
+      return "spanish";
     }
 
     // Default fallback - check for Spanish accents as a last resort
@@ -548,27 +1040,51 @@ export default function ConversationalAgent({
     }
   };
 
-  // Handle isSpeaking changes to detect when messages are complete
-  useEffect(() => {
-    if (!conversation.isSpeaking) {
-      // When AI stops speaking, mark the last AI message as complete
-      setMessageHistory((prev) => {
-        for (let i = prev.length - 1; i >= 0; i--) {
-          if (!prev[i].isUser && !prev[i].messageComplete) {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], messageComplete: true };
-            return updated;
-          }
-        }
-        return prev;
-      });
-    }
-  }, [conversation.isSpeaking]);
-
   // Handle translation for completed messages
   useEffect(() => {
     // Nothing to do here - translation countdown is now handled by the TranslationCountdown component
   }, [messageHistory]);
+
+  // Sample user inputs for mock mode demonstration
+  const sampleUserInputs = [
+    "Hola, ¿cómo estás?",
+    "Me gustaría practicar español",
+    "¿Puedes hablarme sobre la comida española?",
+    "¿Cómo se dice 'thank you' en español?",
+    "Háblame sobre el clima en España",
+    "¿Dónde puedo aprender más vocabulario?",
+    "Me gusta viajar a países hispanohablantes",
+    "¿Cuáles son algunos saludos comunes?",
+    "Necesito practicar los verbos",
+    "¿Puedes recomendarme algunos libros en español?",
+  ];
+
+  // Add auto-scroll function
+  const scrollToBottom = useCallback(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
+    }
+  }, []);
+
+  // Add effect for auto-scrolling when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messageHistory, scrollToBottom]);
+
+  // Load Spanish voices when the component mounts
+  useEffect(() => {
+    // Some browsers need this to get all voices
+    if (window.speechSynthesis) {
+      // Get voices right away (for Chrome and other browsers that load voices synchronously)
+      window.speechSynthesis.getVoices();
+
+      // Listen for the voiceschanged event (for browsers that load voices asynchronously)
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
 
   return (
     <div className={containerClasses}>
@@ -580,26 +1096,24 @@ export default function ConversationalAgent({
       >
         <button
           onClick={
-            conversation.status === "connected"
-              ? stopConversation
-              : startConversation
+            getStatus() === "connected" ? stopConversation : startConversation
           }
-          disabled={conversation.status === "connecting" || isGettingSignedUrl}
+          disabled={getStatus() === "connecting" || isGettingSignedUrl}
           className={`pulse-button relative outline-none focus:ring-4 focus:ring-amber-300/50 dark:focus:ring-amber-700/50
             ${
-              conversation.status === "connected"
+              getStatus() === "connected"
                 ? "bg-red-500 hover:bg-red-600"
                 : "bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-600 hover:to-red-600"
             } 
             text-white text-lg font-medium rounded-full p-4 w-56 h-56 md:w-64 md:h-64 flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}
           aria-label={
-            conversation.status === "connected"
+            getStatus() === "connected"
               ? "Stop conversation"
               : "Start conversation"
           }
         >
           <div className="text-center">
-            {conversation.status === "connected" ? (
+            {getStatus() === "connected" ? (
               <>
                 <div className="flex items-center justify-center space-x-1 mb-2">
                   <div
@@ -620,15 +1134,13 @@ export default function ConversationalAgent({
                   ></div>
                 </div>
                 <span className="block">
-                  {conversation.isSpeaking ? "Speaking..." : "Listening..."}
+                  {getIsSpeaking() ? "Speaking..." : "Listening..."}
                 </span>
                 <span className="text-sm mt-1 block">
-                  {conversation.isSpeaking
-                    ? "Wait to Respond"
-                    : "Click to End Session"}
+                  {getIsSpeaking() ? "Wait to Respond" : "Click to End Session"}
                 </span>
               </>
-            ) : conversation.status === "connecting" || isGettingSignedUrl ? (
+            ) : getStatus() === "connecting" || isGettingSignedUrl ? (
               <>
                 <div className="w-10 h-10 border-4 border-white rounded-full border-t-transparent animate-spin mx-auto mb-2"></div>
                 <span className="block">
@@ -661,9 +1173,9 @@ export default function ConversationalAgent({
         </button>
 
         <div className="mt-3 text-sm text-slate-600">
-          Status: {conversation.status}
-          {conversation.status === "connected" &&
-            ` • ${conversation.isSpeaking ? "Speaking" : "Listening"}`}
+          Status: {getStatus()}
+          {getStatus() === "connected" &&
+            ` • ${getIsSpeaking() ? "Speaking" : "Listening"}`}
         </div>
       </div>
 
@@ -694,7 +1206,10 @@ export default function ConversationalAgent({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto conversation-thread">
+          <div
+            ref={chatContainerRef}
+            className="flex-1 overflow-y-auto conversation-thread"
+          >
             {/* Message history */}
             {messageHistory.map((message, index) => (
               <div
@@ -828,30 +1343,7 @@ export default function ConversationalAgent({
             ))}
 
             {/* Show a placeholder when connected but no messages */}
-            {conversation.status === "connected" &&
-              messageHistory.length === 0 && (
-                <div className="flex justify-start mb-3">
-                  <div className="message-bubble agent-message">
-                    <div className="flex items-center space-x-1">
-                      <div
-                        className="w-1 h-2 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
-                        style={{ animationDelay: "0ms" }}
-                      ></div>
-                      <div
-                        className="w-1 h-3 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
-                        style={{ animationDelay: "300ms" }}
-                      ></div>
-                      <div
-                        className="w-1 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
-                        style={{ animationDelay: "600ms" }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {/* Typing indicator when agent is speaking */}
-            {conversation.isSpeaking && agentResponse && (
+            {getStatus() === "connected" && messageHistory.length === 0 && (
               <div className="flex justify-start mb-3">
                 <div className="message-bubble agent-message">
                   <div className="flex items-center space-x-1">
@@ -871,6 +1363,31 @@ export default function ConversationalAgent({
                 </div>
               </div>
             )}
+
+            {/* Typing indicator when agent is speaking */}
+            {getIsSpeaking() && agentResponse && (
+              <div className="flex justify-start mb-3">
+                <div className="message-bubble agent-message">
+                  <div className="flex items-center space-x-1">
+                    <div
+                      className="w-1 h-2 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                      style={{ animationDelay: "0ms" }}
+                    ></div>
+                    <div
+                      className="w-1 h-3 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                      style={{ animationDelay: "300ms" }}
+                    ></div>
+                    <div
+                      className="w-1 h-1.5 bg-slate-500 dark:bg-slate-400 rounded-full animate-pulse"
+                      style={{ animationDelay: "600ms" }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Invisible element to scroll to */}
+            <div ref={messagesEndRef} />
           </div>
         </div>
       )}

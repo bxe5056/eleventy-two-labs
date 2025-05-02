@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   try {
-    // Get the agent ID from query parameters
+    // Get parameters from query
     const url = new URL(request.url);
     const agentId = url.searchParams.get("agent_id");
+    const mockMode = url.searchParams.get("mock_mode") === "true";
 
     if (!agentId) {
       return NextResponse.json(
@@ -13,7 +14,17 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get API key from environment variable
+    // If mock mode is enabled, return a fake signed URL
+    if (mockMode) {
+      console.log("Using mock signed URL for ElevenLabs");
+      return NextResponse.json({
+        signedUrl:
+          "https://mock-elevenlabs-url.example.com?mock=true&agent_id=" +
+          agentId,
+      });
+    }
+
+    // Get the API key from environment variables
     const apiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!apiKey) {

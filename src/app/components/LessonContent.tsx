@@ -1,35 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useElevenLabs } from "../context/ElevenLabsContext";
 
+/**
+ * Interface for vocabulary items in a lesson
+ * @property {string} spanish - The Spanish word or term
+ * @property {string} english - The English translation
+ * @property {string} [pronunciation] - Optional pronunciation guide
+ */
 interface VocabularyItem {
   spanish: string;
   english: string;
   pronunciation?: string;
 }
 
+/**
+ * Interface for common phrases in a lesson
+ * @property {string} spanish - The Spanish phrase
+ * @property {string} english - The English translation
+ * @property {string} usage - Context or information about when to use the phrase
+ */
 interface Phrase {
   spanish: string;
   english: string;
   usage: string;
 }
 
+/**
+ * Props for the LessonContent component
+ * @property {string} [lessonTitle] - Title of the lesson
+ * @property {string} [category] - Category the lesson belongs to
+ * @property {string} [level] - Difficulty level of the lesson
+ */
 interface LessonContentProps {
   lessonTitle?: string;
   category?: string;
   level?: "beginner" | "intermediate" | "advanced";
 }
 
+/**
+ * Component to display lesson content including vocabulary and phrases
+ * Provides a tabbed interface to switch between different content types
+ */
 export default function LessonContent({
   lessonTitle = "Basic Greetings",
   category = "Conversation",
   level = "beginner",
 }: LessonContentProps) {
+  // State to track which tab is currently active
   const [activeTab, setActiveTab] = useState<"vocabulary" | "phrases">(
     "vocabulary"
   );
 
-  // Mock vocabulary data
+  // Get useMockApi from ElevenLabs context
+  const { useMockApi } = useElevenLabs();
+
+  // Mock vocabulary data for the lesson
   const vocabularyItems: VocabularyItem[] = [
     { spanish: "Hola", english: "Hello", pronunciation: "OH-lah" },
     {
@@ -55,7 +82,7 @@ export default function LessonContent({
     },
   ];
 
-  // Mock phrases data
+  // Mock phrases data for the lesson
   const phrases: Phrase[] = [
     {
       spanish: "¿Cómo estás?",
@@ -79,7 +106,12 @@ export default function LessonContent({
     },
   ];
 
-  const getLevelBadgeColor = (level: string) => {
+  /**
+   * Get appropriate CSS classes for the level badge based on difficulty
+   * @param {string} level - The difficulty level
+   * @returns {string} CSS classes for styling the badge
+   */
+  const getLevelBadgeColor = (level: string): string => {
     switch (level) {
       case "beginner":
         return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
@@ -92,8 +124,92 @@ export default function LessonContent({
     }
   };
 
+  /**
+   * Speaks text using browser's built-in speech synthesis
+   * Used for demo mode to pronounce Spanish words and phrases
+   *
+   * @param {string} text - Text to be spoken
+   */
+  const speakWithSynthesis = useCallback((text: string) => {
+    // Check if speech synthesis is available
+    if (!window.speechSynthesis) {
+      console.warn("Speech synthesis not supported in this browser");
+      return;
+    }
+
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
+    // Create a new utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Configure voice settings for Spanish
+    utterance.lang = "es-ES";
+    utterance.rate = 0.8; // Slightly slower for learning purposes
+    utterance.pitch = 1;
+
+    // Get Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find((voice) => voice.lang.includes("es"));
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+
+    // Set event handlers
+    utterance.onstart = () => {
+      console.log("Speech synthesis started for:", text);
+    };
+
+    utterance.onend = () => {
+      console.log("Speech synthesis ended");
+    };
+
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+    };
+
+    // Speak the text
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  /**
+   * Handles the play pronunciation button click
+   * In demo mode, uses browser speech synthesis
+   * In live mode, would connect to ElevenLabs API (not implemented)
+   *
+   * @param {string} text - Spanish text to pronounce
+   */
+  const handlePlayPronunciation = useCallback(
+    (text: string) => {
+      if (useMockApi) {
+        // In demo mode, use browser's speech synthesis
+        speakWithSynthesis(text);
+      } else {
+        // In live mode, you would connect to ElevenLabs or another TTS service
+        // For now, just show an alert
+        alert(`TODO: Use ElevenLabs API to play pronunciation for "${text}"`);
+      }
+    },
+    [useMockApi, speakWithSynthesis]
+  );
+
+  // Load Spanish voices when the component mounts
+  useEffect(() => {
+    // Some browsers need this to get all voices
+    if (window.speechSynthesis) {
+      // Get voices right away (for Chrome and other browsers that load voices synchronously)
+      window.speechSynthesis.getVoices();
+
+      // Listen for the voiceschanged event (for browsers that load voices asynchronously)
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
+
   return (
     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 w-full max-w-3xl mx-auto border border-slate-200 dark:border-slate-700">
+      {/* Lesson Header */}
       <div className="flex justify-between items-start mb-8">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
@@ -130,6 +246,7 @@ export default function LessonContent({
         </div>
       </div>
 
+      {/* Tab Navigation */}
       <div className="mb-8">
         <div className="border-b border-slate-200 dark:border-slate-700">
           <nav className="flex space-x-8 -mb-px">
@@ -157,7 +274,9 @@ export default function LessonContent({
         </div>
       </div>
 
+      {/* Lesson Content Area */}
       <div className="lesson-content">
+        {/* Vocabulary Tab Content */}
         {activeTab === "vocabulary" && (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
@@ -181,9 +300,7 @@ export default function LessonContent({
                     <button
                       className="text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 p-2 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
                       aria-label="Play pronunciation"
-                      onClick={() =>
-                        alert(`TODO: Play pronunciation for "${item.spanish}"`)
-                      }
+                      onClick={() => handlePlayPronunciation(item.spanish)}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -211,6 +328,7 @@ export default function LessonContent({
           </div>
         )}
 
+        {/* Phrases Tab Content */}
         {activeTab === "phrases" && (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
@@ -234,11 +352,7 @@ export default function LessonContent({
                     <button
                       className="text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 p-2 rounded-full hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
                       aria-label="Play pronunciation"
-                      onClick={() =>
-                        alert(
-                          `TODO: Play pronunciation for "${phrase.spanish}"`
-                        )
-                      }
+                      onClick={() => handlePlayPronunciation(phrase.spanish)}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -254,8 +368,8 @@ export default function LessonContent({
                       </svg>
                     </button>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 pl-2 border-l-2 border-amber-200 dark:border-amber-900/50">
-                    Usage: <span className="font-medium">{phrase.usage}</span>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 pl-3 border-l-2 border-amber-200 dark:border-amber-900/50">
+                    <span className="font-medium">Usage:</span> {phrase.usage}
                   </p>
                 </div>
               ))}

@@ -1,10 +1,17 @@
 "use client";
 
-import React from "react";
+import React, {JSX} from "react";
 import ConversationalAgent from "./components/ConversationalAgent";
 import Link from "next/link";
 
-// Define the lesson card interface
+/**
+ * Interface for lesson card data
+ * @property {string} id - Unique identifier for the lesson
+ * @property {string} title - Title of the lesson
+ * @property {string} category - Category the lesson belongs to
+ * @property {"beginner" | "intermediate" | "advanced"} level - Difficulty level
+ * @property {string} description - Brief description of the lesson
+ */
 interface LessonCard {
   id: string;
   title: string;
@@ -13,8 +20,14 @@ interface LessonCard {
   description: string;
 }
 
-export default function Home() {
-  // Mock lessons data - same as the lessons page
+/**
+ * Home page component for the SpanishVoice application
+ * Contains hero section, conversation agent, and lesson cards
+ *
+ * @returns {JSX.Element} Rendered page component
+ */
+export default function Home(): JSX.Element {
+  // Mock lessons data - shared with lessons page
   const lessons: LessonCard[] = [
     {
       id: "basic-greetings",
@@ -62,7 +75,11 @@ export default function Home() {
     },
   ];
 
-  // Helper functions for category and level colors - same as lessons page
+  /**
+   * Get CSS classes for level badge based on difficulty
+   * @param {string} level - The difficulty level
+   * @returns {string} CSS classes for styling
+   */
   const getLevelColor = (level: string) => {
     switch (level) {
       case "beginner":
@@ -76,7 +93,12 @@ export default function Home() {
     }
   };
 
-  const getCategoryColor = (category: string) => {
+  /**
+   * Get CSS classes for category badge based on lesson type
+   * @param {string} category - The lesson category
+   * @returns {string} CSS classes for styling
+   */
+  const getCategoryColor = (category: string): string => {
     switch (category) {
       case "Conversation":
         return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
@@ -143,8 +165,11 @@ export default function Home() {
                 className="group cursor-pointer text-left"
               >
                 <div className="h-full bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col border border-slate-200 dark:border-slate-700">
+                  {/* Accent bar */}
                   <div className="h-3 bg-gradient-to-r from-amber-500 to-red-500"></div>
+
                   <div className="p-6 flex-1 flex flex-col">
+                    {/* Category and level badges */}
                     <div className="flex flex-wrap gap-2 mb-4">
                       <span
                         className={`${getCategoryColor(
@@ -163,14 +188,17 @@ export default function Home() {
                       </span>
                     </div>
 
+                    {/* Lesson title */}
                     <h2 className="text-xl font-bold mb-3 text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-500 transition-colors">
                       {lesson.title}
                     </h2>
 
+                    {/* Lesson description */}
                     <p className="text-slate-600 dark:text-slate-300 text-sm flex-1 mb-6">
                       {lesson.description}
                     </p>
 
+                    {/* Card footer */}
                     <div className="flex justify-between items-center mt-auto pt-4 border-t border-slate-100 dark:border-slate-700">
                       <span className="text-sm font-medium text-amber-600 dark:text-amber-500 group-hover:text-amber-700 dark:group-hover:text-amber-400 flex items-center gap-1">
                         Start Lesson
