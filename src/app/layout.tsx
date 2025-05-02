@@ -23,7 +23,7 @@ export default function RootLayout({
             <div className="container mx-auto px-4 flex justify-between items-center">
               <Link
                 href="/"
-                className="font-bold text-2xl bg-gradient-to-r from-indigo-400 to-purple-500 bg-clip-text text-transparent"
+                className="font-bold text-2xl bg-gradient-to-r from-amber-500 to-red-600 bg-clip-text text-transparent"
               >
                 SpanishVoice
               </Link>
